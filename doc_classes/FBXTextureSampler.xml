@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="FBXTextureSampler" inherits="Resource" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+	</brief_description>
+	<description>
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="mag_filter" type="int" setter="set_mag_filter" getter="get_mag_filter" default="9729">
+		</member>
+		<member name="min_filter" type="int" setter="set_min_filter" getter="get_min_filter" default="9987">
+		</member>
+		<member name="wrap_s" type="int" setter="set_wrap_s" getter="get_wrap_s" default="10497">
+		</member>
+		<member name="wrap_t" type="int" setter="set_wrap_t" getter="get_wrap_t" default="10497">
+		</member>
+	</members>
+</class>
