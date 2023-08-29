@@ -40,27 +40,19 @@
 #include "editor/editor_settings.h"
 
 static void _editor_init() {
-	Ref<EditorSceneFormatImporterFBX> import_fbx;
+	Ref<EditorSceneFormatImporterUFBX> import_fbx;
 	import_fbx.instantiate();
 	ResourceImporterScene::add_importer(import_fbx);
-	// FBX to glTF importer.
 
-	bool fbx_enabled = GLOBAL_GET("filesystem/import/fbx/enabled");
-	if (fbx_enabled) {
-		Ref<EditorSceneFormatImporterFBX> importer;
-		importer.instantiate();
-		ResourceImporterScene::get_scene_singleton()->add_importer(importer);
-
-		Ref<EditorFileSystemImportFormatSupportQueryFBX> fbx_import_query;
-		fbx_import_query.instantiate();
-		EditorFileSystem::get_singleton()->add_import_format_support_query(fbx_import_query);
-	}
+	Ref<EditorSceneFormatImporterUFBX> importer;
+	importer.instantiate();
+	ResourceImporterScene::get_scene_singleton()->add_importer(importer);
 }
 #endif // TOOLS_ENABLED
 
 #define FBX_REGISTER_DOCUMENT_EXTENSION(m_doc_ext_class) \
-	Ref<m_doc_ext_class> extension_##m_doc_ext_class;     \
-	extension_##m_doc_ext_class.instantiate();            \
+	Ref<m_doc_ext_class> extension_##m_doc_ext_class;    \
+	extension_##m_doc_ext_class.instantiate();           \
 	FBXDocument::register_fbx_document_extension(extension_##m_doc_ext_class);
 
 void initialize_fbx_module(ModuleInitializationLevel p_level) {
@@ -87,9 +79,9 @@ void initialize_fbx_module(ModuleInitializationLevel p_level) {
 		ClassDB::APIType prev_api = ClassDB::get_current_api();
 		ClassDB::set_current_api(ClassDB::API_EDITOR);
 
-		GDREGISTER_CLASS(EditorSceneFormatImporterFBX);
+		GDREGISTER_CLASS(EditorSceneFormatImporterUFBX);
 
-		GDREGISTER_CLASS(EditorSceneFormatImporterFBX);
+		GDREGISTER_CLASS(EditorSceneFormatImporterUFBX);
 		// Can't (a priori) run external app on these platforms.
 		GLOBAL_DEF_RST("filesystem/import/blender/enabled.android", false);
 		GLOBAL_DEF_RST("filesystem/import/blender/enabled.web", false);

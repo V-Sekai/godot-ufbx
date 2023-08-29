@@ -32,6 +32,8 @@
 
 #include "core/config/project_settings.h"
 #include "core/crypto/crypto_core.h"
+#include "core/error/error_list.h"
+#include "core/error/error_macros.h"
 #include "core/io/config_file.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
@@ -39,6 +41,7 @@
 #include "core/io/json.h"
 #include "core/io/stream_peer.h"
 #include "core/math/disjoint_set.h"
+#include "core/string/print_string.h"
 #include "core/version.h"
 #include "drivers/png/png_driver_common.h"
 #include "scene/3d/bone_attachment_3d.h"
@@ -53,6 +56,7 @@
 #include "scene/resources/surface_tool.h"
 
 #include "modules/modules_enabled.gen.h" // For csg, gridmap.
+#include <_types/_uint32_t.h>
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_file_system.h"
@@ -67,6 +71,8 @@
 // FIXME: Hardcoded to avoid editor dependency.
 #define FBX_IMPORT_USE_NAMED_SKIN_BINDS 16
 #define FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS 32
+
+#include "thirdparty/ufbx/ufbx.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -4695,7 +4701,6 @@ void FBXDocument::_remove_duplicate_skins(Ref<FBXState> p_state) {
 	}
 }
 
-
 Error FBXDocument::_serialize_cameras(Ref<FBXState> p_state) {
 	Array cameras;
 	cameras.resize(p_state->cameras.size());
@@ -5161,7 +5166,6 @@ ImporterMeshInstance3D *FBXDocument::_generate_mesh_instance(Ref<FBXState> p_sta
 	return mi;
 }
 
-
 Camera3D *FBXDocument::_generate_camera(Ref<FBXState> p_state, const FBXNodeIndex p_node_index) {
 	Ref<FBXNode> gltf_node = p_state->nodes[p_node_index];
 
@@ -5340,7 +5344,6 @@ void FBXDocument::_convert_camera_to_gltf(Camera3D *camera, Ref<FBXState> p_stat
 		p_gltf_node->camera = camera_index;
 	}
 }
-
 
 #ifdef MODULE_GRIDMAP_ENABLED
 void FBXDocument::_convert_grid_map_to_gltf(GridMap *p_grid_map, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state) {
@@ -7230,6 +7233,29 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	p_state->filename = p_path.get_file().get_basename();
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
+
+	ufbx_load_opts opts = { 0 };
+	ufbx_error error;
+	ufbx_scene *scene = ufbx_load_file((const char *)p_path.to_utf8_buffer().ptr(), &opts, &error);
+	if (!scene) {
+		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
+		return FAILED;
+	}
+
+	for (size_t i = 0; i < scene->nodes.count; i++) {
+		ufbx_node *node = scene->nodes.data[i];
+		if (node->is_root) {
+			continue;
+		}
+
+		print_line(vformat("Object: %s\n", node->name.data));
+		if (node->mesh) {
+			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
+		}
+	}
+
+	ufbx_free_scene(scene);
+
 	Error err;
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ, &err);
 	ERR_FAIL_COND_V(err != OK, ERR_FILE_CANT_OPEN);

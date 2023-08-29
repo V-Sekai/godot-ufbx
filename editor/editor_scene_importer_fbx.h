@@ -40,8 +40,8 @@
 class Animation;
 class Node;
 
-class EditorSceneFormatImporterFBX : public EditorSceneFormatImporter {
-	GDCLASS(EditorSceneFormatImporterFBX, EditorSceneFormatImporter);
+class EditorSceneFormatImporterUFBX : public EditorSceneFormatImporter {
+	GDCLASS(EditorSceneFormatImporterUFBX, EditorSceneFormatImporter);
 
 public:
 	virtual uint32_t get_import_flags() const override;
@@ -54,16 +54,6 @@ public:
 	virtual Variant get_option_visibility(const String &p_path, bool p_for_animation, const String &p_option,
 			const HashMap<StringName, Variant> &p_options) override;
 };
-
-class EditorFileSystemImportFormatSupportQueryFBX : public EditorFileSystemImportFormatSupportQuery {
-	GDCLASS(EditorFileSystemImportFormatSupportQueryFBX, EditorFileSystemImportFormatSupportQuery);
-
-public:
-	virtual bool is_active() const override;
-	virtual Vector<String> get_file_extensions() const override;
-	virtual bool query() override;
-};
-
 #endif // TOOLS_ENABLED
 
 #endif // EDITOR_SCENE_IMPORTER_FBX_H
