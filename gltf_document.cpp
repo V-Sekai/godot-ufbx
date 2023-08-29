@@ -7247,7 +7247,7 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 			continue;
 		}
 
-		print_line(vformat("Object: %s\n", node->name.data));
+		print_line(vformat("Object: %s", node->name.data));
 		if (node->mesh) {
 			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
 		}
