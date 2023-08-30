@@ -7233,7 +7233,7 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
 
-	ufbx_load_opts opts = { };
+	ufbx_load_opts opts = {};
 	ufbx_error error;
 	ufbx_scene *scene = ufbx_load_file((const char *)p_path.to_utf8_buffer().ptr(), &opts, &error);
 	if (!scene) {
