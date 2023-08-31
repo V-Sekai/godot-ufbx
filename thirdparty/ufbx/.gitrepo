@@ -6,7 +6,7 @@
 [subrepo]
 	remote = https://github.com/ufbx/ufbx.git
 	branch = master
-	commit = 30f035bbe5ecd90860392825eb586b5110400aa8
-	parent = 57da1910baf53c339136bad4f6a1f66366bb448c
+	commit = 3ce37ffbe1bc7116ccff449f99a5927f36399419
+	parent = b3ab9cb5c6d4349700da54511e2bd0af8a64ff10
 	method = merge
 	cmdver = 0.4.6
