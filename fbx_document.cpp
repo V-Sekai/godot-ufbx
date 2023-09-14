@@ -5432,7 +5432,8 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 
 	ufbx_load_opts opts = {};
 	ufbx_error error;
-	ufbx_scene *scene = ufbx_load_file((const char *)p_path.to_utf8_buffer().ptr(), &opts, &error);
+	Vector<uint8_t> data = p_file->get_buffer(p_file->get_length());
+	ufbx_scene *scene = ufbx_load_memory(data.ptr(), data.size(), &opts, &error);
 	if (!scene) {
 		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
 		return FAILED;
