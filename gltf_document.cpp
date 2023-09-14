@@ -6753,46 +6753,69 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 }
 
 Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file) {
-	Error err;
+	Error err = ERR_INVALID_DATA;
 	if (p_file.is_null()) {
 		return FAILED;
 	}
-	p_file->seek(0);
-	uint32_t magic = p_file->get_32();
-	if (magic == 0x46546C67) {
-		//binary file
-		//text file
-		p_file->seek(0);
-		err = _parse_glb(p_file, p_state);
-		if (err != OK) {
-			return err;
-		}
-	} else {
-		p_file->seek(0);
-		String text = p_file->get_as_utf8_string();
-		JSON json;
-		err = json.parse(text);
-		if (err != OK) {
-			_err_print_error("", "", json.get_error_line(), json.get_error_message().utf8().get_data(), false, ERR_HANDLER_SCRIPT);
-		}
-		ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-		p_state->json = json.get_data();
+
+	ufbx_load_opts opts = {};
+	ufbx_error error;
+	ufbx_scene *scene = ufbx_load_file((const char *)p_path.to_utf8_buffer().ptr(), &opts, &error);
+	if (!scene) {
+		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
+		return FAILED;
 	}
 
-	err = _parse_asset_header(p_state);
-	ERR_FAIL_COND_V(err != OK, err);
-
-	document_extensions.clear();
-	for (Ref<FBXDocumentExtension> ext : all_document_extensions) {
-		ERR_CONTINUE(ext.is_null());
-		err = ext->import_preflight(p_state, p_state->json["extensionsUsed"]);
-		if (err == OK) {
-			document_extensions.push_back(ext);
+	for (size_t i = 0; i < scene->nodes.count; i++) {
+		ufbx_node *node = scene->nodes.data[i];
+		if (node->is_root) {
+			continue;
 		}
-	}
 
-	err = _parse_gltf_state(p_state, p_path);
-	ERR_FAIL_COND_V(err != OK, err);
+		print_line(vformat("Object: %s", node->name.data));
+		if (node->mesh) {
+			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
+		}
+	}	
+	ERR_FAIL_NULL_V(scene, err);
+	ufbx_free_scene(scene);
+
+	// p_file->seek(0);
+	// uint32_t magic = p_file->get_32();
+	// if (magic == 0x46546C67) {
+	// 	//binary file
+	// 	//text file
+	// 	p_file->seek(0);
+	// 	err = _parse_glb(p_file, p_state);
+	// 	if (err != OK) {
+	// 		return err;
+	// 	}
+	// } else {
+	// 	p_file->seek(0);
+	// 	String text = p_file->get_as_utf8_string();
+	// 	JSON json;
+	// 	err = json.parse(text);
+	// 	if (err != OK) {
+	// 		_err_print_error("", "", json.get_error_line(), json.get_error_message().utf8().get_data(), false, ERR_HANDLER_SCRIPT);
+	// 	}
+	// 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
+	// 	p_state->json = json.get_data();
+	// }
+
+	// err = _parse_asset_header(p_state);
+	// ERR_FAIL_COND_V(err != OK, err);
+
+	// document_extensions.clear();
+	// for (Ref<FBXDocumentExtension> ext : all_document_extensions) {
+	// 	ERR_CONTINUE(ext.is_null());
+	// 	err = ext->import_preflight(p_state, p_state->json["extensionsUsed"]);
+	// 	if (err == OK) {
+	// 		document_extensions.push_back(ext);
+	// 	}
+	// }
+
+	// err = _parse_gltf_state(p_state, p_path);
+	// ERR_FAIL_COND_V(err != OK, err);
 
 	return OK;
 }
@@ -7232,29 +7255,6 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	p_state->filename = p_path.get_file().get_basename();
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
-
-	ufbx_load_opts opts = {};
-	ufbx_error error;
-	ufbx_scene *scene = ufbx_load_file((const char *)p_path.to_utf8_buffer().ptr(), &opts, &error);
-	if (!scene) {
-		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
-		return FAILED;
-	}
-
-	for (size_t i = 0; i < scene->nodes.count; i++) {
-		ufbx_node *node = scene->nodes.data[i];
-		if (node->is_root) {
-			continue;
-		}
-
-		print_line(vformat("Object: %s", node->name.data));
-		if (node->mesh) {
-			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
-		}
-	}
-
-	ufbx_free_scene(scene);
-
 	Error err;
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ, &err);
 	ERR_FAIL_COND_V(err != OK, ERR_FILE_CANT_OPEN);

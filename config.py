@@ -21,6 +21,7 @@ def get_doc_classes():
         "FBXState",
         "FBXTexture",
         "FBXTextureSampler",
+        "EditorSceneFormatImporterUFBX",
     ]
 
 
