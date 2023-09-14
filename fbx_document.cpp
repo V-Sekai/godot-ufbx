@@ -2355,14 +2355,14 @@ Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, con
 }
 
 void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image) {
-	FBXState::GLTFHandleBinary handling = FBXState::GLTFHandleBinary(p_state->handle_binary_image);
-	if (p_image->is_empty() || handling == FBXState::GLTFHandleBinary::HANDLE_BINARY_DISCARD_TEXTURES) {
+	FBXState::FBXHandleBinary handling = FBXState::FBXHandleBinary(p_state->handle_binary_image);
+	if (p_image->is_empty() || handling == FBXState::FBXHandleBinary::HANDLE_BINARY_DISCARD_TEXTURES) {
 		p_state->images.push_back(Ref<Texture2D>());
 		p_state->source_images.push_back(Ref<Image>());
 		return;
 	}
 #ifdef TOOLS_ENABLED
-	if (Engine::get_singleton()->is_editor_hint() && handling == FBXState::GLTFHandleBinary::HANDLE_BINARY_EXTRACT_TEXTURES) {
+	if (Engine::get_singleton()->is_editor_hint() && handling == FBXState::FBXHandleBinary::HANDLE_BINARY_EXTRACT_TEXTURES) {
 		if (p_state->base_path.is_empty()) {
 			p_state->images.push_back(Ref<Texture2D>());
 			p_state->source_images.push_back(Ref<Image>());
@@ -2429,7 +2429,7 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 		return;
 	}
 #endif // TOOLS_ENABLED
-	if (handling == FBXState::GLTFHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
+	if (handling == FBXState::FBXHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
 		Ref<PortableCompressedTexture2D> tex;
 		tex.instantiate();
 		tex->set_name(p_image->get_name());
@@ -2621,7 +2621,7 @@ Ref<Texture2D> FBXDocument::_get_texture(Ref<FBXState> p_state, const FBXTexture
 	ERR_FAIL_INDEX_V(p_texture, p_state->textures.size(), Ref<Texture2D>());
 	const FBXImageIndex image = p_state->textures[p_texture]->get_src_image();
 	ERR_FAIL_INDEX_V(image, p_state->images.size(), Ref<Texture2D>());
-	if (FBXState::GLTFHandleBinary(p_state->handle_binary_image) == FBXState::GLTFHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
+	if (FBXState::FBXHandleBinary(p_state->handle_binary_image) == FBXState::FBXHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
 		ERR_FAIL_INDEX_V(image, p_state->source_images.size(), Ref<Texture2D>());
 		Ref<PortableCompressedTexture2D> portable_texture;
 		portable_texture.instantiate();
