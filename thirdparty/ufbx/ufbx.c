@@ -684,7 +684,7 @@ ufbx_static_assert(sizeof_f64, sizeof(double) == 8);
 
 // -- Version
 
-#define UFBX_SOURCE_VERSION ufbx_pack_version(0, 5, 2)
+#define UFBX_SOURCE_VERSION ufbx_pack_version(0, 6, 1)
 const uint32_t ufbx_source_version = UFBX_SOURCE_VERSION;
 
 ufbx_static_assert(source_header_version, UFBX_SOURCE_VERSION/1000u == UFBX_HEADER_VERSION/1000u);
@@ -4658,6 +4658,7 @@ static const char ufbxi_MaterialAssignation[] = "MaterialAssignation";
 static const char ufbxi_Material[] = "Material";
 static const char ufbxi_Materials[] = "Materials";
 static const char ufbxi_Matrix[] = "Matrix";
+static const char ufbxi_Media[] = "Media";
 static const char ufbxi_Mesh[] = "Mesh";
 static const char ufbxi_Model[] = "Model";
 static const char ufbxi_Name[] = "Name";
@@ -4947,6 +4948,7 @@ static ufbx_string ufbxi_strings[] = {
 	{ ufbxi_MaterialAssignation, 19 },
 	{ ufbxi_Materials, 9 },
 	{ ufbxi_Matrix, 6 },
+	{ ufbxi_Media, 5 },
 	{ ufbxi_Mesh, 4 },
 	{ ufbxi_Model, 5 },
 	{ ufbxi_Name, 4 },
@@ -6699,6 +6701,8 @@ typedef enum {
 	UFBXI_PARSE_GEOMETRY,
 	UFBXI_PARSE_NODE_ATTRIBUTE,
 	UFBXI_PARSE_LEGACY_MODEL,
+	UFBXI_PARSE_LEGACY_MEDIA,
+	UFBXI_PARSE_LEGACY_VIDEO,
 	UFBXI_PARSE_LEGACY_SWITCHER,
 	UFBXI_PARSE_LEGACY_SCENE_PERSISTENCE,
 	UFBXI_PARSE_REFERENCES,
@@ -6761,6 +6765,7 @@ static ufbxi_noinline ufbxi_parse_state ufbxi_update_parse_state(ufbxi_parse_sta
 		if (name == ufbxi_Model) return UFBXI_PARSE_LEGACY_MODEL;
 		if (!strcmp(name, "References")) return UFBXI_PARSE_REFERENCES;
 		if (!strcmp(name, "Relations")) return UFBXI_PARSE_RELATIONS;
+		if (name == ufbxi_Media) return UFBXI_PARSE_LEGACY_MEDIA;
 		if (!strcmp(name, "Switcher")) return UFBXI_PARSE_LEGACY_SWITCHER;
 		if (!strcmp(name, "SceneGenericPersistence")) return UFBXI_PARSE_LEGACY_SCENE_PERSISTENCE;
 		break;
@@ -6806,6 +6811,13 @@ static ufbxi_noinline ufbxi_parse_state ufbxi_update_parse_state(ufbxi_parse_sta
 	case UFBXI_PARSE_DEFORMER:
 		if (!strcmp(name, "AssociateModel")) return UFBXI_PARSE_ASSOCIATE_MODEL;
 		break;
+
+	case UFBXI_PARSE_LEGACY_MEDIA:
+		if (name == ufbxi_Video) return UFBXI_PARSE_LEGACY_VIDEO;
+		break;
+
+	case UFBXI_PARSE_LEGACY_VIDEO:
+		return UFBXI_PARSE_VIDEO;
 
 	case UFBXI_PARSE_LEGACY_MODEL:
 		if (name == ufbxi_GeometryUVInfo) return UFBXI_PARSE_GEOMETRY_UV_INFO;
@@ -7286,7 +7298,7 @@ static ufbxi_noinline bool ufbxi_is_raw_string(ufbxi_context *uc, ufbxi_parse_st
 
 	case UFBXI_PARSE_TEXTURE:
 		if (!strcmp(name, "TextureName")) return true;
-		if (!strcmp(name, "Media")) return true;
+		if (name == ufbxi_Media) return true;
 		break;
 
 	case UFBXI_PARSE_GEOMETRY:
@@ -11546,14 +11558,14 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_mesh(ufbxi_context *uc, ufb
 			ufbxi_check(ufbxi_read_vertex_element(uc, mesh, n, (ufbx_vertex_attrib*)&mesh->vertex_crease,
 				ufbxi_VertexCrease, ufbxi_VertexCreaseIndex, 'r', 1));
 		} else if (n->name == ufbxi_LayerElementEdgeCrease) {
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByEdge) {
 				if (mesh->edge_crease.count) continue;
 				ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->edge_crease.data, &mesh->edge_crease.count, n, ufbxi_EdgeCrease, 'r', mesh->num_edges));
 			}
 		} else if (n->name == ufbxi_LayerElementSmoothing) {
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByEdge) {
 				if (mesh->edge_smoothing.count) continue;
@@ -11563,7 +11575,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_mesh(ufbxi_context *uc, ufb
 				ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->face_smoothing.data, &mesh->face_smoothing.count, n, ufbxi_Smoothing, 'b', mesh->num_faces));
 			}
 		} else if (n->name == ufbxi_LayerElementVisibility) {
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByEdge) {
 				if (mesh->edge_visibility.count) continue;
@@ -11571,7 +11583,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_mesh(ufbxi_context *uc, ufb
 			}
 		} else if (n->name == ufbxi_LayerElementMaterial) {
 			if (mesh->face_material.count) continue;
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByPolygon) {
 				ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->face_material.data, &mesh->face_material.count, n, ufbxi_Materials, 'i', mesh->num_faces));
@@ -11592,14 +11604,14 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_mesh(ufbxi_context *uc, ufb
 			}
 		} else if (n->name == ufbxi_LayerElementPolygonGroup) {
 			if (mesh->face_group.count) continue;
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByPolygon) {
 				ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->face_group.data, &mesh->face_group.count, n, ufbxi_PolygonGroup, 'i', mesh->num_faces));
 			}
 		} else if (n->name == ufbxi_LayerElementHole) {
 			if (mesh->face_group.count) continue;
-			const char *mapping;
+			const char *mapping = NULL;
 			ufbxi_check(ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping));
 			if (mapping == ufbxi_ByPolygon) {
 				ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->face_hole.data, &mesh->face_hole.count, n, ufbxi_Hole, 'b', mesh->num_faces));
@@ -11625,7 +11637,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_mesh(ufbxi_context *uc, ufb
 
 			if (prop_name.length > 0) {
 				ufbxi_check(ufbxi_push_string_place_str(&uc->string_pool, &prop_name, false));
-				const char *mapping;
+				const char *mapping = NULL;
 				if (ufbxi_find_val1(n, ufbxi_MappingInformationType, "c", (char**)&mapping)) {
 					ufbxi_value_array *arr = ufbxi_find_array(n, ufbxi_TextureId, 'i');
 
@@ -13591,7 +13603,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_legacy_mesh(ufbxi_context *
 
 	// Material indices
 	{
-		const char *mapping;
+		const char *mapping = NULL;
 		ufbxi_check(ufbxi_find_val1(node, ufbxi_MaterialAssignation, "C", (char**)&mapping));
 		if (mapping == ufbxi_ByPolygon) {
 			ufbxi_check(ufbxi_read_truncated_array(uc, &mesh->face_material.data, &mesh->face_material.count, node, ufbxi_Materials, 'i', mesh->num_faces));
@@ -13650,6 +13662,23 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_legacy_mesh(ufbxi_context *
 	mesh->skinned_normal = mesh->vertex_normal;
 
 	ufbxi_patch_mesh_reals(mesh);
+
+	return 1;
+}
+
+ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_legacy_media(ufbxi_context *uc, ufbxi_node *node)
+{
+	ufbxi_node *videos = ufbxi_find_child(node, ufbxi_Video);
+	if (videos) {
+		ufbxi_for(ufbxi_node, child, videos->children, videos->num_children) {
+			ufbxi_element_info video_info = { 0 };
+			ufbxi_check(ufbxi_get_val1(child, "S", &video_info.name));
+			ufbxi_check(ufbxi_push_synthetic_id(uc, &video_info.fbx_id));
+			video_info.dom_node = ufbxi_get_dom_node(uc, node);
+
+			ufbxi_check(ufbxi_read_video(uc, child, &video_info));
+		}
+	}
 
 	return 1;
 }
@@ -13747,6 +13776,8 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_read_legacy_root(ufbxi_context *
 		ufbxi_node *node = uc->top_node;
 		if (node->name == ufbxi_FBXHeaderExtension) {
 			ufbxi_check(ufbxi_read_header_extension(uc));
+		} else if (node->name == ufbxi_Media) {
+			ufbxi_check(ufbxi_read_legacy_media(uc, node));
 		} else if (node->name == ufbxi_Takes) {
 			ufbxi_check(ufbxi_read_takes(uc));
 		} else if (node->name == ufbxi_Model) {
