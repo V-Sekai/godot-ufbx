@@ -34,19 +34,19 @@ void FBXDocumentExtension::_bind_methods() {
 	// Import process.
 	GDVIRTUAL_BIND(_import_preflight, "state", "extensions");
 	GDVIRTUAL_BIND(_get_supported_extensions);
-	GDVIRTUAL_BIND(_parse_node_extensions, "state", "gltf_node", "extensions");
+	GDVIRTUAL_BIND(_parse_node_extensions, "state", "fbx_node", "extensions");
 	GDVIRTUAL_BIND(_parse_image_data, "state", "image_data", "mime_type", "ret_image");
 	GDVIRTUAL_BIND(_get_image_file_extension);
 	GDVIRTUAL_BIND(_parse_texture_json, "state", "texture_json", "ret_gltf_texture");
-	GDVIRTUAL_BIND(_generate_scene_node, "state", "gltf_node", "scene_parent");
+	GDVIRTUAL_BIND(_generate_scene_node, "state", "fbx_node", "scene_parent");
 	GDVIRTUAL_BIND(_import_post_parse, "state");
-	GDVIRTUAL_BIND(_import_node, "state", "gltf_node", "json", "node");
+	GDVIRTUAL_BIND(_import_node, "state", "fbx_node", "json", "node");
 	GDVIRTUAL_BIND(_import_post, "state", "root");
 	// Export process.
 	GDVIRTUAL_BIND(_export_preflight, "state", "root");
-	GDVIRTUAL_BIND(_convert_scene_node, "state", "gltf_node", "scene_node");
+	GDVIRTUAL_BIND(_convert_scene_node, "state", "fbx_node", "scene_node");
 	GDVIRTUAL_BIND(_export_preserialize, "state");
-	GDVIRTUAL_BIND(_export_node, "state", "gltf_node", "json", "node");
+	GDVIRTUAL_BIND(_export_node, "state", "fbx_node", "json", "node");
 	GDVIRTUAL_BIND(_export_post, "state");
 }
 
