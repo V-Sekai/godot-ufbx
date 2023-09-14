@@ -79,12 +79,12 @@
 #include <limits>
 
 static size_t _file_access_read_fn(void *user, void *data, size_t size) {
-	FileAccess *file = (FileAccess*)user;
+	FileAccess *file = static_cast<FileAccess*>(user);
 	return (size_t)file->get_buffer((uint8_t*)data, (uint64_t)size);
 }
 
 static bool _file_access_skip_fn(void *user, size_t size) {
-	FileAccess *file = (FileAccess*)user;
+	FileAccess *file = static_cast<FileAccess*>(user);
 	file->seek(file->get_position() + size);
 	return true;
 }
