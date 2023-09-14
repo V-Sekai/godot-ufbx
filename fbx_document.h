@@ -73,8 +73,8 @@ protected:
 	static void _bind_methods();
 
 public:
-	static void register_gltf_document_extension(Ref<FBXDocumentExtension> p_extension, bool p_first_priority = false);
-	static void unregister_gltf_document_extension(Ref<FBXDocumentExtension> p_extension);
+	static void register_fbx_document_extension(Ref<FBXDocumentExtension> p_extension, bool p_first_priority = false);
+	static void unregister_fbx_document_extension(Ref<FBXDocumentExtension> p_extension);
 	static void unregister_all_fbx_document_extensions();
 
 private:
@@ -147,9 +147,6 @@ private:
 			const FBXAccessorIndex p_accessor,
 			const bool p_for_vertex);
 	Error _parse_meshes(Ref<FBXState> p_state);
-	Error _serialize_textures(Ref<FBXState> p_state);
-	Error _serialize_texture_samplers(Ref<FBXState> p_state);
-	Error _serialize_images(Ref<FBXState> p_state);
 	Ref<Image> _parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension);
 	void _parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image);
 	Error _parse_images(Ref<FBXState> p_state, const String &p_base_path);
@@ -179,21 +176,17 @@ private:
 			const FBXSkeletonIndex p_skel_i);
 	Error _create_skeletons(Ref<FBXState> p_state);
 	Error _map_skin_joints_indices_to_skeleton_bone_indices(Ref<FBXState> p_state);
-	Error _serialize_skins(Ref<FBXState> p_state);
 	Error _create_skins(Ref<FBXState> p_state);
 	bool _skins_are_same(const Ref<Skin> p_skin_a, const Ref<Skin> p_skin_b);
 	void _remove_duplicate_skins(Ref<FBXState> p_state);
-	Error _serialize_cameras(Ref<FBXState> p_state);
 	Error _parse_cameras(Ref<FBXState> p_state);
 	Error _parse_animations(Ref<FBXState> p_state);
-	Error _serialize_animations(Ref<FBXState> p_state);
 	BoneAttachment3D *_generate_bone_attachment(Ref<FBXState> p_state,
 			Skeleton3D *p_skeleton,
 			const FBXNodeIndex p_node_index,
 			const FBXNodeIndex p_bone_index);
 	ImporterMeshInstance3D *_generate_mesh_instance(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	Camera3D *_generate_camera(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
-	Light3D *_generate_light(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	Node3D *_generate_spatial(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	void _assign_node_names(Ref<FBXState> p_state);
 	template <class T>
@@ -253,10 +246,6 @@ private:
 			FBXBufferViewIndex &r_accessor);
 	Error _encode_accessors(Ref<FBXState> p_state);
 	Error _encode_buffer_views(Ref<FBXState> p_state);
-	Error _serialize_materials(Ref<FBXState> p_state);
-	Error _serialize_meshes(Ref<FBXState> p_state);
-	Error _serialize_nodes(Ref<FBXState> p_state);
-	Error _serialize_scenes(Ref<FBXState> p_state);
 	String interpolation_to_string(const FBXAnimation::Interpolation p_interp);
 	FBXAnimation::Track _convert_animation_track(Ref<FBXState> p_state,
 			FBXAnimation::Track p_track,
@@ -265,13 +254,6 @@ private:
 			FBXNodeIndex p_node_i);
 	Error _encode_buffer_bins(Ref<FBXState> p_state, const String &p_path);
 	Error _encode_buffer_glb(Ref<FBXState> p_state, const String &p_path);
-	PackedByteArray _serialize_glb_buffer(Ref<FBXState> p_state, Error *r_err);
-	Dictionary _serialize_texture_transform_uv1(Ref<BaseMaterial3D> p_material);
-	Dictionary _serialize_texture_transform_uv2(Ref<BaseMaterial3D> p_material);
-	Error _serialize_asset_header(Ref<FBXState> p_state);
-	Error _serialize_file(Ref<FBXState> p_state, const String p_path);
-	Error _serialize_gltf_extensions(Ref<FBXState> p_state) const;
-
 public:
 	// https://www.itu.int/rec/R-REC-BT.601
 	// https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.601-7-201103-I!!PDF-E.pdf
@@ -295,8 +277,6 @@ public:
 
 public:
 	Node *generate_scene(Ref<FBXState> p_state, float p_bake_fps = 30.0f, bool p_trimming = false, bool p_remove_immutable_tracks = true);
-	PackedByteArray generate_buffer(Ref<FBXState> p_state);
-	Error write_to_filesystem(Ref<FBXState> p_state, const String &p_path);
 
 public:
 	Error _parse_gltf_state(Ref<FBXState> p_state, const String &p_search_path);
@@ -360,7 +340,6 @@ public:
 	FBXMeshIndex _convert_mesh_to_gltf(Ref<FBXState> p_state,
 			MeshInstance3D *p_mesh_instance);
 	void _convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, String p_animation_track_name);
-	Error _serialize(Ref<FBXState> p_state);
 	Error _parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file);
 };
 
