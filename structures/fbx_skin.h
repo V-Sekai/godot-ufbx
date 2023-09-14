@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_node.h                                                           */
+/*  gltf_skin.h                                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,72 +28,87 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef FBX_NODE_H
-#define FBX_NODE_H
+#ifndef FBX_SKIN_H
+#define FBX_SKIN_H
 
-#include "../gltf_defines.h"
+#include "../fbx_defines.h"
 
 #include "core/io/resource.h"
 
-class FBXNode : public Resource {
-	GDCLASS(FBXNode, Resource);
+template <typename T>
+class TypedArray;
+
+class FBXSkin : public Resource {
+	GDCLASS(FBXSkin, Resource);
 	friend class FBXDocument;
 
 private:
-	// matrices need to be transformed to this
-	FBXNodeIndex parent = -1;
-	int height = -1;
-	Transform3D xform;
-	FBXMeshIndex mesh = -1;
-	FBXCameraIndex camera = -1;
-	FBXSkinIndex skin = -1;
+	// The "skeleton" property defined in the gltf spec. -1 = Scene Root
+	FBXNodeIndex skin_root = -1;
+
+	Vector<FBXNodeIndex> joints_original;
+	Vector<Transform3D> inverse_binds;
+
+	// Note: joints + non_joints should form a complete subtree, or subtrees
+	// with a common parent
+
+	// All nodes that are skins that are caught in-between the original joints
+	// (inclusive of joints_original)
+	Vector<FBXNodeIndex> joints;
+
+	// All Nodes that are caught in-between skin joint nodes, and are not
+	// defined as joints by any skin
+	Vector<FBXNodeIndex> non_joints;
+
+	// The roots of the skin. In the case of multiple roots, their parent *must*
+	// be the same (the roots must be siblings)
+	Vector<FBXNodeIndex> roots;
+
+	// The GLTF Skeleton this Skin points to (after we determine skeletons)
 	FBXSkeletonIndex skeleton = -1;
-	bool joint = false;
-	Vector3 position;
-	Quaternion rotation;
-	Vector3 scale = Vector3(1, 1, 1);
-	Vector<int> children;
-	Dictionary additional_data;
+
+	// A mapping from the joint indices (in the order of joints_original) to the
+	// Godot Skeleton's bone_indices
+	HashMap<int, int> joint_i_to_bone_i;
+	HashMap<int, StringName> joint_i_to_name;
+
+	// The Actual Skin that will be created as a mapping between the IBM's of
+	// this skin to the generated skeleton for the mesh instances.
+	Ref<Skin> godot_skin;
 
 protected:
 	static void _bind_methods();
 
 public:
-	FBXNodeIndex get_parent();
-	void set_parent(FBXNodeIndex p_parent);
+	FBXNodeIndex get_skin_root();
+	void set_skin_root(FBXNodeIndex p_skin_root);
 
-	int get_height();
-	void set_height(int p_height);
+	Vector<FBXNodeIndex> get_joints_original();
+	void set_joints_original(Vector<FBXNodeIndex> p_joints_original);
 
-	Transform3D get_xform();
-	void set_xform(Transform3D p_xform);
+	TypedArray<Transform3D> get_inverse_binds();
+	void set_inverse_binds(TypedArray<Transform3D> p_inverse_binds);
 
-	FBXMeshIndex get_mesh();
-	void set_mesh(FBXMeshIndex p_mesh);
+	Vector<FBXNodeIndex> get_joints();
+	void set_joints(Vector<FBXNodeIndex> p_joints);
 
-	FBXCameraIndex get_camera();
-	void set_camera(FBXCameraIndex p_camera);
+	Vector<FBXNodeIndex> get_non_joints();
+	void set_non_joints(Vector<FBXNodeIndex> p_non_joints);
 
-	FBXSkinIndex get_skin();
-	void set_skin(FBXSkinIndex p_skin);
+	Vector<FBXNodeIndex> get_roots();
+	void set_roots(Vector<FBXNodeIndex> p_roots);
 
-	FBXSkeletonIndex get_skeleton();
-	void set_skeleton(FBXSkeletonIndex p_skeleton);
+	int get_skeleton();
+	void set_skeleton(int p_skeleton);
 
-	Vector3 get_position();
-	void set_position(Vector3 p_position);
+	Dictionary get_joint_i_to_bone_i();
+	void set_joint_i_to_bone_i(Dictionary p_joint_i_to_bone_i);
 
-	Quaternion get_rotation();
-	void set_rotation(Quaternion p_rotation);
+	Dictionary get_joint_i_to_name();
+	void set_joint_i_to_name(Dictionary p_joint_i_to_name);
 
-	Vector3 get_scale();
-	void set_scale(Vector3 p_scale);
-
-	Vector<int> get_children();
-	void set_children(Vector<int> p_children);
-
-	Variant get_additional_data(const StringName &p_extension_name);
-	void set_additional_data(const StringName &p_extension_name, Variant p_additional_data);
+	Ref<Skin> get_godot_skin();
+	void set_godot_skin(Ref<Skin> p_godot_skin);
 };
 
-#endif // GLTF_NODE_H
+#endif // GLTF_SKIN_H

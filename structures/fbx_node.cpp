@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_node.h"
+#include "fbx_node.h"
 
 void FBXNode::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_parent"), &FBXNode::get_parent);

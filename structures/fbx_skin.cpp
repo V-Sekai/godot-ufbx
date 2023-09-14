@@ -28,9 +28,9 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_skin.h"
+#include "fbx_skin.h"
 
-#include "../gltf_template_convert.h"
+#include "../fbx_template_convert.h"
 
 #include "core/variant/typed_array.h"
 #include "scene/resources/skin.h"

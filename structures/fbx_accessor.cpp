@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_accessor.h"
+#include "fbx_accessor.h"
 
 void FBXAccessor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_buffer_view"), &FBXAccessor::get_buffer_view);

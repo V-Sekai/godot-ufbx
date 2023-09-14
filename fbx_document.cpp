@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_document.h"
+#include "fbx_document.h"
 
 #include "core/config/project_settings.h"
 #include "core/crypto/crypto_core.h"

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_animation.cpp                                                    */
+/*  gltf_texture.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,26 +28,28 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_animation.h"
+#ifndef FBX_TEXTURE_H
+#define FBX_TEXTURE_H
 
-void FBXAnimation::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_loop"), &FBXAnimation::get_loop);
-	ClassDB::bind_method(D_METHOD("set_loop", "loop"), &FBXAnimation::set_loop);
+#include "../fbx_defines.h"
 
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "loop"), "set_loop", "get_loop"); // bool
-}
+#include "core/io/resource.h"
 
-bool FBXAnimation::get_loop() const {
-	return loop;
-}
+class FBXTexture : public Resource {
+	GDCLASS(FBXTexture, Resource);
 
-void FBXAnimation::set_loop(bool p_val) {
-	loop = p_val;
-}
+private:
+	FBXImageIndex src_image = -1;
+	FBXTextureSamplerIndex sampler = -1;
 
-HashMap<int, FBXAnimation::Track> &FBXAnimation::get_tracks() {
-	return tracks;
-}
+protected:
+	static void _bind_methods();
 
-FBXAnimation::FBXAnimation() {
-}
+public:
+	FBXImageIndex get_src_image() const;
+	void set_src_image(FBXImageIndex val);
+	FBXTextureSamplerIndex get_sampler() const;
+	void set_sampler(FBXTextureSamplerIndex val);
+};
+
+#endif // GLTF_TEXTURE_H

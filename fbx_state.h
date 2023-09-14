@@ -31,16 +31,16 @@
 #ifndef FBX_STATE_H
 #define FBX_STATE_H
 
-#include "structures/gltf_accessor.h"
-#include "structures/gltf_animation.h"
-#include "structures/gltf_buffer_view.h"
-#include "structures/gltf_camera.h"
-#include "structures/gltf_mesh.h"
-#include "structures/gltf_node.h"
-#include "structures/gltf_skeleton.h"
-#include "structures/gltf_skin.h"
-#include "structures/gltf_texture.h"
-#include "structures/gltf_texture_sampler.h"
+#include "structures/fbx_accessor.h"
+#include "structures/fbx_animation.h"
+#include "structures/fbx_buffer_view.h"
+#include "structures/fbx_camera.h"
+#include "structures/fbx_mesh.h"
+#include "structures/fbx_node.h"
+#include "structures/fbx_skeleton.h"
+#include "structures/fbx_skin.h"
+#include "structures/fbx_texture.h"
+#include "structures/fbx_texture_sampler.h"
 
 class FBXState : public Resource {
 	GDCLASS(FBXState, Resource);

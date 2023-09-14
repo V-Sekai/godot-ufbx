@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_texture.h"
+#include "fbx_texture.h"
 
 void FBXTexture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_src_image"), &FBXTexture::get_src_image);

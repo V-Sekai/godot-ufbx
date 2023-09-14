@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_texture_sampler.cpp                                              */
+/*  gltf_node.h                                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,20 +28,72 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_texture_sampler.h"
+#ifndef FBX_NODE_H
+#define FBX_NODE_H
 
-void FBXTextureSampler::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_mag_filter"), &FBXTextureSampler::get_mag_filter);
-	ClassDB::bind_method(D_METHOD("set_mag_filter", "filter_mode"), &FBXTextureSampler::set_mag_filter);
-	ClassDB::bind_method(D_METHOD("get_min_filter"), &FBXTextureSampler::get_min_filter);
-	ClassDB::bind_method(D_METHOD("set_min_filter", "filter_mode"), &FBXTextureSampler::set_min_filter);
-	ClassDB::bind_method(D_METHOD("get_wrap_s"), &FBXTextureSampler::get_wrap_s);
-	ClassDB::bind_method(D_METHOD("set_wrap_s", "wrap_mode"), &FBXTextureSampler::set_wrap_s);
-	ClassDB::bind_method(D_METHOD("get_wrap_t"), &FBXTextureSampler::get_wrap_t);
-	ClassDB::bind_method(D_METHOD("set_wrap_t", "wrap_mode"), &FBXTextureSampler::set_wrap_t);
+#include "../fbx_defines.h"
 
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "mag_filter"), "set_mag_filter", "get_mag_filter");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "min_filter"), "set_min_filter", "get_min_filter");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "wrap_s"), "set_wrap_s", "get_wrap_s");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "wrap_t"), "set_wrap_t", "get_wrap_t");
-}
+#include "core/io/resource.h"
+
+class FBXNode : public Resource {
+	GDCLASS(FBXNode, Resource);
+	friend class FBXDocument;
+
+private:
+	// matrices need to be transformed to this
+	FBXNodeIndex parent = -1;
+	int height = -1;
+	Transform3D xform;
+	FBXMeshIndex mesh = -1;
+	FBXCameraIndex camera = -1;
+	FBXSkinIndex skin = -1;
+	FBXSkeletonIndex skeleton = -1;
+	bool joint = false;
+	Vector3 position;
+	Quaternion rotation;
+	Vector3 scale = Vector3(1, 1, 1);
+	Vector<int> children;
+	Dictionary additional_data;
+
+protected:
+	static void _bind_methods();
+
+public:
+	FBXNodeIndex get_parent();
+	void set_parent(FBXNodeIndex p_parent);
+
+	int get_height();
+	void set_height(int p_height);
+
+	Transform3D get_xform();
+	void set_xform(Transform3D p_xform);
+
+	FBXMeshIndex get_mesh();
+	void set_mesh(FBXMeshIndex p_mesh);
+
+	FBXCameraIndex get_camera();
+	void set_camera(FBXCameraIndex p_camera);
+
+	FBXSkinIndex get_skin();
+	void set_skin(FBXSkinIndex p_skin);
+
+	FBXSkeletonIndex get_skeleton();
+	void set_skeleton(FBXSkeletonIndex p_skeleton);
+
+	Vector3 get_position();
+	void set_position(Vector3 p_position);
+
+	Quaternion get_rotation();
+	void set_rotation(Quaternion p_rotation);
+
+	Vector3 get_scale();
+	void set_scale(Vector3 p_scale);
+
+	Vector<int> get_children();
+	void set_children(Vector<int> p_children);
+
+	Variant get_additional_data(const StringName &p_extension_name);
+	void set_additional_data(const StringName &p_extension_name, Variant p_additional_data);
+};
+
+#endif // GLTF_NODE_H

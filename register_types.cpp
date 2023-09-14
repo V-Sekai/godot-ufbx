@@ -30,7 +30,7 @@
 
 #include "register_types.h"
 
-#include "gltf_document.h"
+#include "fbx_document.h"
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_scene_importer_fbx.h"

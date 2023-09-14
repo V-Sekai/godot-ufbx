@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_skeleton.h                                                       */
+/*  gltf_animation.cpp                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,76 +28,26 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef FBX_SKELETON_H
-#define FBX_SKELETON_H
+#include "fbx_animation.h"
 
-#include "../gltf_defines.h"
+void FBXAnimation::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_loop"), &FBXAnimation::get_loop);
+	ClassDB::bind_method(D_METHOD("set_loop", "loop"), &FBXAnimation::set_loop);
 
-#include "core/io/resource.h"
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "loop"), "set_loop", "get_loop"); // bool
+}
 
-class FBXSkeleton : public Resource {
-	GDCLASS(FBXSkeleton, Resource);
-	friend class FBXDocument;
+bool FBXAnimation::get_loop() const {
+	return loop;
+}
 
-private:
-	// The *synthesized* skeletons joints
-	Vector<FBXNodeIndex> joints;
+void FBXAnimation::set_loop(bool p_val) {
+	loop = p_val;
+}
 
-	// The roots of the skeleton. If there are multiple, each root must have the
-	// same parent (ie roots are siblings)
-	Vector<FBXNodeIndex> roots;
+HashMap<int, FBXAnimation::Track> &FBXAnimation::get_tracks() {
+	return tracks;
+}
 
-	// The created Skeleton3D for the scene
-	Skeleton3D *godot_skeleton = nullptr;
-
-	// Set of unique bone names for the skeleton
-	HashSet<String> unique_names;
-
-	HashMap<int32_t, FBXNodeIndex> godot_bone_node;
-
-	Vector<BoneAttachment3D *> bone_attachments;
-
-protected:
-	static void _bind_methods();
-
-public:
-	Vector<FBXNodeIndex> get_joints();
-	void set_joints(Vector<FBXNodeIndex> p_joints);
-
-	Vector<FBXNodeIndex> get_roots();
-	void set_roots(Vector<FBXNodeIndex> p_roots);
-
-	Skeleton3D *get_godot_skeleton();
-
-	// Skeleton *get_godot_skeleton() {
-	// 	return this->godot_skeleton;
-	// }
-	// void set_godot_skeleton(Skeleton p_*godot_skeleton) {
-	// 	this->godot_skeleton = p_godot_skeleton;
-	// }
-
-	TypedArray<String> get_unique_names();
-	void set_unique_names(TypedArray<String> p_unique_names);
-
-	//RBMap<int32_t, FBXNodeIndex> get_godot_bone_node() {
-	//	return this->godot_bone_node;
-	//}
-	//void set_godot_bone_node(RBMap<int32_t, FBXNodeIndex> p_godot_bone_node) {
-	//	this->godot_bone_node = p_godot_bone_node;
-	//}
-	Dictionary get_godot_bone_node();
-	void set_godot_bone_node(Dictionary p_indict);
-
-	//Dictionary get_godot_bone_node() {
-	//	return VariantConversion::to_dict(this->godot_bone_node);
-	//}
-	//void set_godot_bone_node(Dictionary p_indict) {
-	//	VariantConversion::set_from_dict(this->godot_bone_node, p_indict);
-	//}
-
-	BoneAttachment3D *get_bone_attachment(int idx);
-
-	int32_t get_bone_attachment_count();
-};
-
-#endif // GLTF_SKELETON_H
+FBXAnimation::FBXAnimation() {
+}

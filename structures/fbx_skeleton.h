@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_skin.h                                                           */
+/*  gltf_skeleton.h                                                       */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,87 +28,76 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef FBX_SKIN_H
-#define FBX_SKIN_H
+#ifndef FBX_SKELETON_H
+#define FBX_SKELETON_H
 
-#include "../gltf_defines.h"
+#include "../fbx_defines.h"
 
 #include "core/io/resource.h"
 
-template <typename T>
-class TypedArray;
-
-class FBXSkin : public Resource {
-	GDCLASS(FBXSkin, Resource);
+class FBXSkeleton : public Resource {
+	GDCLASS(FBXSkeleton, Resource);
 	friend class FBXDocument;
 
 private:
-	// The "skeleton" property defined in the gltf spec. -1 = Scene Root
-	FBXNodeIndex skin_root = -1;
-
-	Vector<FBXNodeIndex> joints_original;
-	Vector<Transform3D> inverse_binds;
-
-	// Note: joints + non_joints should form a complete subtree, or subtrees
-	// with a common parent
-
-	// All nodes that are skins that are caught in-between the original joints
-	// (inclusive of joints_original)
+	// The *synthesized* skeletons joints
 	Vector<FBXNodeIndex> joints;
 
-	// All Nodes that are caught in-between skin joint nodes, and are not
-	// defined as joints by any skin
-	Vector<FBXNodeIndex> non_joints;
-
-	// The roots of the skin. In the case of multiple roots, their parent *must*
-	// be the same (the roots must be siblings)
+	// The roots of the skeleton. If there are multiple, each root must have the
+	// same parent (ie roots are siblings)
 	Vector<FBXNodeIndex> roots;
 
-	// The GLTF Skeleton this Skin points to (after we determine skeletons)
-	FBXSkeletonIndex skeleton = -1;
+	// The created Skeleton3D for the scene
+	Skeleton3D *godot_skeleton = nullptr;
 
-	// A mapping from the joint indices (in the order of joints_original) to the
-	// Godot Skeleton's bone_indices
-	HashMap<int, int> joint_i_to_bone_i;
-	HashMap<int, StringName> joint_i_to_name;
+	// Set of unique bone names for the skeleton
+	HashSet<String> unique_names;
 
-	// The Actual Skin that will be created as a mapping between the IBM's of
-	// this skin to the generated skeleton for the mesh instances.
-	Ref<Skin> godot_skin;
+	HashMap<int32_t, FBXNodeIndex> godot_bone_node;
+
+	Vector<BoneAttachment3D *> bone_attachments;
 
 protected:
 	static void _bind_methods();
 
 public:
-	FBXNodeIndex get_skin_root();
-	void set_skin_root(FBXNodeIndex p_skin_root);
-
-	Vector<FBXNodeIndex> get_joints_original();
-	void set_joints_original(Vector<FBXNodeIndex> p_joints_original);
-
-	TypedArray<Transform3D> get_inverse_binds();
-	void set_inverse_binds(TypedArray<Transform3D> p_inverse_binds);
-
 	Vector<FBXNodeIndex> get_joints();
 	void set_joints(Vector<FBXNodeIndex> p_joints);
-
-	Vector<FBXNodeIndex> get_non_joints();
-	void set_non_joints(Vector<FBXNodeIndex> p_non_joints);
 
 	Vector<FBXNodeIndex> get_roots();
 	void set_roots(Vector<FBXNodeIndex> p_roots);
 
-	int get_skeleton();
-	void set_skeleton(int p_skeleton);
+	Skeleton3D *get_godot_skeleton();
 
-	Dictionary get_joint_i_to_bone_i();
-	void set_joint_i_to_bone_i(Dictionary p_joint_i_to_bone_i);
+	// Skeleton *get_godot_skeleton() {
+	// 	return this->godot_skeleton;
+	// }
+	// void set_godot_skeleton(Skeleton p_*godot_skeleton) {
+	// 	this->godot_skeleton = p_godot_skeleton;
+	// }
 
-	Dictionary get_joint_i_to_name();
-	void set_joint_i_to_name(Dictionary p_joint_i_to_name);
+	TypedArray<String> get_unique_names();
+	void set_unique_names(TypedArray<String> p_unique_names);
 
-	Ref<Skin> get_godot_skin();
-	void set_godot_skin(Ref<Skin> p_godot_skin);
+	//RBMap<int32_t, FBXNodeIndex> get_godot_bone_node() {
+	//	return this->godot_bone_node;
+	//}
+	//void set_godot_bone_node(RBMap<int32_t, FBXNodeIndex> p_godot_bone_node) {
+	//	this->godot_bone_node = p_godot_bone_node;
+	//}
+	Dictionary get_godot_bone_node();
+	void set_godot_bone_node(Dictionary p_indict);
+
+	//Dictionary get_godot_bone_node() {
+	//	return VariantConversion::to_dict(this->godot_bone_node);
+	//}
+	//void set_godot_bone_node(Dictionary p_indict) {
+	//	VariantConversion::set_from_dict(this->godot_bone_node, p_indict);
+	//}
+
+	BoneAttachment3D *get_bone_attachment(int idx);
+
+	int32_t get_bone_attachment_count();
 };
 
-#endif // GLTF_SKIN_H
+#endif // GLTF_SKELETON_H

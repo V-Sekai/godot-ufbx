@@ -31,7 +31,7 @@
 #ifndef FBX_DOCUMENT_EXTENSION_H
 #define FBX_DOCUMENT_EXTENSION_H
 
-#include "../gltf_state.h"
+#include "../fbx_state.h"
 
 class FBXDocumentExtension : public Resource {
 	GDCLASS(FBXDocumentExtension, Resource);

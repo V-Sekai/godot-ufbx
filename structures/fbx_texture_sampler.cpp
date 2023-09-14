@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_mesh.cpp                                                         */
+/*  gltf_texture_sampler.cpp                                              */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,43 +28,20 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_mesh.h"
+#include "fbx_texture_sampler.h"
 
-#include "scene/resources/importer_mesh.h"
+void FBXTextureSampler::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_mag_filter"), &FBXTextureSampler::get_mag_filter);
+	ClassDB::bind_method(D_METHOD("set_mag_filter", "filter_mode"), &FBXTextureSampler::set_mag_filter);
+	ClassDB::bind_method(D_METHOD("get_min_filter"), &FBXTextureSampler::get_min_filter);
+	ClassDB::bind_method(D_METHOD("set_min_filter", "filter_mode"), &FBXTextureSampler::set_min_filter);
+	ClassDB::bind_method(D_METHOD("get_wrap_s"), &FBXTextureSampler::get_wrap_s);
+	ClassDB::bind_method(D_METHOD("set_wrap_s", "wrap_mode"), &FBXTextureSampler::set_wrap_s);
+	ClassDB::bind_method(D_METHOD("get_wrap_t"), &FBXTextureSampler::get_wrap_t);
+	ClassDB::bind_method(D_METHOD("set_wrap_t", "wrap_mode"), &FBXTextureSampler::set_wrap_t);
 
-void FBXMesh::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_mesh"), &FBXMesh::get_mesh);
-	ClassDB::bind_method(D_METHOD("set_mesh", "mesh"), &FBXMesh::set_mesh);
-	ClassDB::bind_method(D_METHOD("get_blend_weights"), &FBXMesh::get_blend_weights);
-	ClassDB::bind_method(D_METHOD("set_blend_weights", "blend_weights"), &FBXMesh::set_blend_weights);
-	ClassDB::bind_method(D_METHOD("get_instance_materials"), &FBXMesh::get_instance_materials);
-	ClassDB::bind_method(D_METHOD("set_instance_materials", "instance_materials"), &FBXMesh::set_instance_materials);
-
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh"), "set_mesh", "get_mesh");
-	ADD_PROPERTY(PropertyInfo(Variant::PACKED_FLOAT32_ARRAY, "blend_weights"), "set_blend_weights", "get_blend_weights"); // Vector<float>
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "instance_materials"), "set_instance_materials", "get_instance_materials");
-}
-
-Ref<ImporterMesh> FBXMesh::get_mesh() {
-	return mesh;
-}
-
-void FBXMesh::set_mesh(Ref<ImporterMesh> p_mesh) {
-	mesh = p_mesh;
-}
-
-TypedArray<Material> FBXMesh::get_instance_materials() {
-	return instance_materials;
-}
-
-void FBXMesh::set_instance_materials(TypedArray<Material> p_instance_materials) {
-	instance_materials = p_instance_materials;
-}
-
-Vector<float> FBXMesh::get_blend_weights() {
-	return blend_weights;
-}
-
-void FBXMesh::set_blend_weights(Vector<float> p_blend_weights) {
-	blend_weights = p_blend_weights;
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "mag_filter"), "set_mag_filter", "get_mag_filter");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "min_filter"), "set_min_filter", "get_min_filter");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "wrap_s"), "set_wrap_s", "get_wrap_s");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "wrap_t"), "set_wrap_t", "get_wrap_t");
 }

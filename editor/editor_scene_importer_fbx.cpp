@@ -32,7 +32,7 @@
 
 #ifdef TOOLS_ENABLED
 
-#include "../gltf_document.h"
+#include "../fbx_document.h"
 
 #include "core/config/project_settings.h"
 #include "editor/editor_settings.h"

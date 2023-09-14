@@ -28,9 +28,9 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_skeleton.h"
+#include "fbx_skeleton.h"
 
-#include "../gltf_template_convert.h"
+#include "../fbx_template_convert.h"
 
 #include "scene/3d/bone_attachment_3d.h"
 

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_buffer_view.h                                                    */
+/*  gltf_accessor.h                                                       */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,43 +28,78 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef FBX_BUFFER_VIEW_H
-#define FBX_BUFFER_VIEW_H
+#ifndef FBX_ACCESSOR_H
+#define FBX_ACCESSOR_H
 
-#include "../gltf_defines.h"
+#include "../fbx_defines.h"
 
 #include "core/io/resource.h"
 
-class FBXBufferView : public Resource {
-	GDCLASS(FBXBufferView, Resource);
+struct FBXAccessor : public Resource {
+	GDCLASS(FBXAccessor, Resource);
 	friend class FBXDocument;
 
 private:
-	FBXBufferIndex buffer = -1;
+	FBXBufferViewIndex buffer_view = -1;
 	int byte_offset = 0;
-	int byte_length = 0;
-	int byte_stride = -1;
-	bool indices = false;
+	int component_type = 0;
+	bool normalized = false;
+	int count = 0;
+	FBXType type = FBXType::TYPE_SCALAR;
+	Vector<double> min;
+	Vector<double> max;
+	int sparse_count = 0;
+	int sparse_indices_buffer_view = 0;
+	int sparse_indices_byte_offset = 0;
+	int sparse_indices_component_type = 0;
+	int sparse_values_buffer_view = 0;
+	int sparse_values_byte_offset = 0;
 
 protected:
 	static void _bind_methods();
 
 public:
-	FBXBufferIndex get_buffer();
-	void set_buffer(FBXBufferIndex p_buffer);
+	FBXBufferViewIndex get_buffer_view();
+	void set_buffer_view(FBXBufferViewIndex p_buffer_view);
 
 	int get_byte_offset();
 	void set_byte_offset(int p_byte_offset);
 
-	int get_byte_length();
-	void set_byte_length(int p_byte_length);
+	int get_component_type();
+	void set_component_type(int p_component_type);
 
-	int get_byte_stride();
-	void set_byte_stride(int p_byte_stride);
+	bool get_normalized();
+	void set_normalized(bool p_normalized);
 
-	bool get_indices();
-	void set_indices(bool p_indices);
-	// matrices need to be transformed to this
+	int get_count();
+	void set_count(int p_count);
+
+	int get_type();
+	void set_type(int p_type);
+
+	Vector<double> get_min();
+	void set_min(Vector<double> p_min);
+
+	Vector<double> get_max();
+	void set_max(Vector<double> p_max);
+
+	int get_sparse_count();
+	void set_sparse_count(int p_sparse_count);
+
+	int get_sparse_indices_buffer_view();
+	void set_sparse_indices_buffer_view(int p_sparse_indices_buffer_view);
+
+	int get_sparse_indices_byte_offset();
+	void set_sparse_indices_byte_offset(int p_sparse_indices_byte_offset);
+
+	int get_sparse_indices_component_type();
+	void set_sparse_indices_component_type(int p_sparse_indices_component_type);
+
+	int get_sparse_values_buffer_view();
+	void set_sparse_values_buffer_view(int p_sparse_values_buffer_view);
+
+	int get_sparse_values_byte_offset();
+	void set_sparse_values_byte_offset(int p_sparse_values_byte_offset);
 };
 
-#endif // GLTF_BUFFER_VIEW_H
+#endif // GLTF_ACCESSOR_H

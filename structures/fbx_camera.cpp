@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "gltf_camera.h"
+#include "fbx_camera.h"
 
 #include "scene/3d/camera_3d.h"
 

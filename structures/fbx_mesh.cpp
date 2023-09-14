@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_texture.h                                                        */
+/*  gltf_mesh.cpp                                                         */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,28 +28,43 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef FBX_TEXTURE_H
-#define FBX_TEXTURE_H
+#include "fbx_mesh.h"
 
-#include "../gltf_defines.h"
+#include "scene/resources/importer_mesh.h"
 
-#include "core/io/resource.h"
+void FBXMesh::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_mesh"), &FBXMesh::get_mesh);
+	ClassDB::bind_method(D_METHOD("set_mesh", "mesh"), &FBXMesh::set_mesh);
+	ClassDB::bind_method(D_METHOD("get_blend_weights"), &FBXMesh::get_blend_weights);
+	ClassDB::bind_method(D_METHOD("set_blend_weights", "blend_weights"), &FBXMesh::set_blend_weights);
+	ClassDB::bind_method(D_METHOD("get_instance_materials"), &FBXMesh::get_instance_materials);
+	ClassDB::bind_method(D_METHOD("set_instance_materials", "instance_materials"), &FBXMesh::set_instance_materials);
 
-class FBXTexture : public Resource {
-	GDCLASS(FBXTexture, Resource);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh"), "set_mesh", "get_mesh");
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_FLOAT32_ARRAY, "blend_weights"), "set_blend_weights", "get_blend_weights"); // Vector<float>
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "instance_materials"), "set_instance_materials", "get_instance_materials");
+}
 
-private:
-	FBXImageIndex src_image = -1;
-	FBXTextureSamplerIndex sampler = -1;
+Ref<ImporterMesh> FBXMesh::get_mesh() {
+	return mesh;
+}
 
-protected:
-	static void _bind_methods();
+void FBXMesh::set_mesh(Ref<ImporterMesh> p_mesh) {
+	mesh = p_mesh;
+}
 
-public:
-	FBXImageIndex get_src_image() const;
-	void set_src_image(FBXImageIndex val);
-	FBXTextureSamplerIndex get_sampler() const;
-	void set_sampler(FBXTextureSamplerIndex val);
-};
+TypedArray<Material> FBXMesh::get_instance_materials() {
+	return instance_materials;
+}
 
-#endif // GLTF_TEXTURE_H
+void FBXMesh::set_instance_materials(TypedArray<Material> p_instance_materials) {
+	instance_materials = p_instance_materials;
+}
+
+Vector<float> FBXMesh::get_blend_weights() {
+	return blend_weights;
+}
+
+void FBXMesh::set_blend_weights(Vector<float> p_blend_weights) {
+	blend_weights = p_blend_weights;
+}
