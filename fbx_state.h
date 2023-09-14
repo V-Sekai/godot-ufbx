@@ -92,8 +92,8 @@ class FBXState : public Resource {
 	HashMap<FBXNodeIndex, Node *> scene_nodes;
 	HashMap<FBXNodeIndex, ImporterMeshInstance3D *> scene_mesh_instances;
 
-	HashMap<ObjectID, FBXSkeletonIndex> skeleton3d_to_gltf_skeleton;
-	HashMap<ObjectID, HashMap<ObjectID, FBXSkinIndex>> skin_and_skeleton3d_to_gltf_skin;
+	HashMap<ObjectID, FBXSkeletonIndex> skeleton3d_to_fbx_skeleton;
+	HashMap<ObjectID, HashMap<ObjectID, FBXSkinIndex>> skin_and_skeleton3d_to_fbx_skin;
 	Dictionary additional_data;
 
 protected:
@@ -102,7 +102,7 @@ protected:
 public:
 	void add_used_extension(const String &p_extension, bool p_required = false);
 
-	enum GLTFHandleBinary {
+	enum FBXHandleBinary {
 		HANDLE_BINARY_DISCARD_TEXTURES = 0,
 		HANDLE_BINARY_EXTRACT_TEXTURES,
 		HANDLE_BINARY_EMBED_AS_BASISU,

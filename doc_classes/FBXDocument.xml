@@ -33,12 +33,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="generate_buffer">
-			<return type="PackedByteArray" />
-			<param index="0" name="state" type="FBXState" />
-			<description>
-			</description>
-		</method>
 		<method name="generate_scene">
 			<return type="Node" />
 			<param index="0" name="state" type="FBXState" />
@@ -48,23 +42,16 @@
 			<description>
 			</description>
 		</method>
-		<method name="register_gltf_document_extension" qualifiers="static">
+		<method name="register_fbx_document_extension" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="extension" type="FBXDocumentExtension" />
 			<param index="1" name="first_priority" type="bool" default="false" />
 			<description>
 			</description>
 		</method>
-		<method name="unregister_gltf_document_extension" qualifiers="static">
+		<method name="unregister_fbx_document_extension" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="extension" type="FBXDocumentExtension" />
-			<description>
-			</description>
-		</method>
-		<method name="write_to_filesystem">
-			<return type="int" enum="Error" />
-			<param index="0" name="state" type="FBXState" />
-			<param index="1" name="path" type="String" />
 			<description>
 			</description>
 		</method>

@@ -471,77 +471,6 @@ static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
 	return buf;
 }
 
-Error FBXDocument::_encode_buffer_glb(Ref<FBXState> p_state, const String &p_path) {
-	print_verbose("glTF: Total buffers: " + itos(p_state->buffers.size()));
-
-	if (!p_state->buffers.size()) {
-		return OK;
-	}
-	Array buffers;
-	if (p_state->buffers.size()) {
-		Vector<uint8_t> buffer_data = p_state->buffers[0];
-		Dictionary gltf_buffer;
-
-		gltf_buffer["byteLength"] = buffer_data.size();
-		buffers.push_back(gltf_buffer);
-	}
-
-	for (FBXBufferIndex i = 1; i < p_state->buffers.size() - 1; i++) {
-		Vector<uint8_t> buffer_data = p_state->buffers[i];
-		Dictionary gltf_buffer;
-		String filename = p_path.get_basename().get_file() + itos(i) + ".bin";
-		String path = p_path.get_base_dir() + "/" + filename;
-		Error err;
-		Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE, &err);
-		if (file.is_null()) {
-			return err;
-		}
-		if (buffer_data.size() == 0) {
-			return OK;
-		}
-		file->create(FileAccess::ACCESS_RESOURCES);
-		file->store_buffer(buffer_data.ptr(), buffer_data.size());
-		gltf_buffer["uri"] = filename;
-		gltf_buffer["byteLength"] = buffer_data.size();
-		buffers.push_back(gltf_buffer);
-	}
-	p_state->json["buffers"] = buffers;
-
-	return OK;
-}
-
-Error FBXDocument::_encode_buffer_bins(Ref<FBXState> p_state, const String &p_path) {
-	print_verbose("glTF: Total buffers: " + itos(p_state->buffers.size()));
-
-	if (!p_state->buffers.size()) {
-		return OK;
-	}
-	Array buffers;
-
-	for (FBXBufferIndex i = 0; i < p_state->buffers.size(); i++) {
-		Vector<uint8_t> buffer_data = p_state->buffers[i];
-		Dictionary gltf_buffer;
-		String filename = p_path.get_basename().get_file() + itos(i) + ".bin";
-		String path = p_path.get_base_dir() + "/" + filename;
-		Error err;
-		Ref<FileAccess> file = FileAccess::open(path, FileAccess::WRITE, &err);
-		if (file.is_null()) {
-			return err;
-		}
-		if (buffer_data.size() == 0) {
-			return OK;
-		}
-		file->create(FileAccess::ACCESS_RESOURCES);
-		file->store_buffer(buffer_data.ptr(), buffer_data.size());
-		gltf_buffer["uri"] = filename;
-		gltf_buffer["byteLength"] = buffer_data.size();
-		buffers.push_back(gltf_buffer);
-	}
-	p_state->json["buffers"] = buffers;
-
-	return OK;
-}
-
 Error FBXDocument::_parse_buffers(Ref<FBXState> p_state, const String &p_base_path) {
 	if (!p_state->json.has("buffers")) {
 		return OK;
@@ -3521,7 +3450,7 @@ Error FBXDocument::_create_skeletons(Ref<FBXState> p_state) {
 
 		Skeleton3D *skeleton = memnew(Skeleton3D);
 		gltf_skeleton->godot_skeleton = skeleton;
-		p_state->skeleton3d_to_gltf_skeleton[skeleton->get_instance_id()] = skel_i;
+		p_state->skeleton3d_to_fbx_skeleton[skeleton->get_instance_id()] = skel_i;
 
 		// Make a unique name, no gltf node represents this skeleton
 		skeleton->set_name("Skeleton3D");
@@ -4239,7 +4168,7 @@ void FBXDocument::_convert_skeleton_to_fbx(Skeleton3D *p_skeleton3d, Ref<FBXStat
 	//
 	gltf_skeleton->godot_skeleton = skeleton;
 	FBXSkeletonIndex skeleton_i = p_state->skeletons.size();
-	p_state->skeleton3d_to_gltf_skeleton[skeleton->get_instance_id()] = skeleton_i;
+	p_state->skeleton3d_to_fbx_skeleton[skeleton->get_instance_id()] = skeleton_i;
 	p_state->skeletons.push_back(gltf_skeleton);
 
 	BoneId bone_count = skeleton->get_bone_count();
@@ -4294,8 +4223,8 @@ void FBXDocument::_convert_bone_attachment_to_fbx(BoneAttachment3D *p_bone_attac
 		skeleton = cast_to<Skeleton3D>(p_bone_attachment->get_parent());
 	}
 	FBXSkeletonIndex skel_gltf_i = -1;
-	if (skeleton != nullptr && p_state->skeleton3d_to_gltf_skeleton.has(skeleton->get_instance_id())) {
-		skel_gltf_i = p_state->skeleton3d_to_gltf_skeleton[skeleton->get_instance_id()];
+	if (skeleton != nullptr && p_state->skeleton3d_to_fbx_skeleton.has(skeleton->get_instance_id())) {
+		skel_gltf_i = p_state->skeleton3d_to_fbx_skeleton[skeleton->get_instance_id()];
 	}
 	int bone_idx = -1;
 	if (skeleton != nullptr) {
@@ -4317,16 +4246,16 @@ void FBXDocument::_convert_bone_attachment_to_fbx(BoneAttachment3D *p_bone_attac
 }
 
 void FBXDocument::_convert_mesh_instance_to_fbx(MeshInstance3D *p_scene_parent, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
-	FBXMeshIndex gltf_mesh_index = _convert_mesh_to_fbx(p_state, p_scene_parent);
-	if (gltf_mesh_index != -1) {
-		p_gltf_node->mesh = gltf_mesh_index;
+	FBXMeshIndex fbx_mesh_index = _convert_mesh_to_fbx(p_state, p_scene_parent);
+	if (fbx_mesh_index != -1) {
+		p_gltf_node->mesh = fbx_mesh_index;
 	}
 }
 
 void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root) {
-	Ref<FBXNode> gltf_node = p_state->nodes[p_node_index];
+	Ref<FBXNode> fbx_node = p_state->nodes[p_node_index];
 
-	if (gltf_node->skeleton >= 0) {
+	if (fbx_node->skeleton >= 0) {
 		_generate_skeleton_bone_node(p_state, p_node_index, p_scene_parent, p_scene_root);
 		return;
 	}
@@ -4339,15 +4268,15 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 	const bool non_bone_parented_to_skeleton = active_skeleton;
 
 	// skinned meshes must not be placed in a bone attachment.
-	if (non_bone_parented_to_skeleton && gltf_node->skin < 0) {
+	if (non_bone_parented_to_skeleton && fbx_node->skin < 0) {
 		// Bone Attachment - Parent Case
-		BoneAttachment3D *bone_attachment = _generate_bone_attachment(p_state, active_skeleton, p_node_index, gltf_node->parent);
+		BoneAttachment3D *bone_attachment = _generate_bone_attachment(p_state, active_skeleton, p_node_index, fbx_node->parent);
 
 		p_scene_parent->add_child(bone_attachment, true);
 		bone_attachment->set_owner(p_scene_root);
 
-		// There is no gltf_node that represent this, so just directly create a unique name
-		bone_attachment->set_name(gltf_node->get_name());
+		// There is no fbx_node that represent this, so just directly create a unique name
+		bone_attachment->set_name(fbx_node->get_name());
 
 		// We change the scene_parent to our bone attachment now. We do not set current_node because we want to make the node
 		// and attach it to the bone_attachment
@@ -4356,22 +4285,22 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 	// Check if any FBXDocumentExtension classes want to generate a node for us.
 	for (Ref<FBXDocumentExtension> ext : document_extensions) {
 		ERR_CONTINUE(ext.is_null());
-		current_node = ext->generate_scene_node(p_state, gltf_node, p_scene_parent);
+		current_node = ext->generate_scene_node(p_state, fbx_node, p_scene_parent);
 		if (current_node) {
 			break;
 		}
 	}
 	// If none of our FBXDocumentExtension classes generated us a node, we generate one.
 	if (!current_node) {
-		if (gltf_node->skin >= 0 && gltf_node->mesh >= 0 && !gltf_node->children.is_empty()) {
+		if (fbx_node->skin >= 0 && fbx_node->mesh >= 0 && !fbx_node->children.is_empty()) {
 			current_node = _generate_spatial(p_state, p_node_index);
 			Node3D *mesh_inst = _generate_mesh_instance(p_state, p_node_index);
-			mesh_inst->set_name(gltf_node->get_name());
+			mesh_inst->set_name(fbx_node->get_name());
 
 			current_node->add_child(mesh_inst, true);
-		} else if (gltf_node->mesh >= 0) {
+		} else if (fbx_node->mesh >= 0) {
 			current_node = _generate_mesh_instance(p_state, p_node_index);
-		} else if (gltf_node->camera >= 0) {
+		} else if (fbx_node->camera >= 0) {
 			current_node = _generate_camera(p_state, p_node_index);
 		} else {
 			current_node = _generate_spatial(p_state, p_node_index);
@@ -4384,34 +4313,34 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 		args.append(p_scene_root);
 		current_node->propagate_call(StringName("set_owner"), args);
 	}
-	current_node->set_transform(gltf_node->xform);
-	current_node->set_name(gltf_node->get_name());
+	current_node->set_transform(fbx_node->xform);
+	current_node->set_name(fbx_node->get_name());
 
 	p_state->scene_nodes.insert(p_node_index, current_node);
-	for (int i = 0; i < gltf_node->children.size(); ++i) {
-		_generate_scene_node(p_state, gltf_node->children[i], current_node, p_scene_root);
+	for (int i = 0; i < fbx_node->children.size(); ++i) {
+		_generate_scene_node(p_state, fbx_node->children[i], current_node, p_scene_root);
 	}
 }
 
 void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root) {
-	Ref<FBXNode> gltf_node = p_state->nodes[p_node_index];
+	Ref<FBXNode> fbx_node = p_state->nodes[p_node_index];
 
 	Node3D *current_node = nullptr;
 
-	Skeleton3D *skeleton = p_state->skeletons[gltf_node->skeleton]->godot_skeleton;
+	Skeleton3D *skeleton = p_state->skeletons[fbx_node->skeleton]->godot_skeleton;
 	// In this case, this node is already a bone in skeleton.
-	const bool is_skinned_mesh = (gltf_node->skin >= 0 && gltf_node->mesh >= 0);
-	const bool requires_extra_node = (gltf_node->mesh >= 0 || gltf_node->camera >= 0);
+	const bool is_skinned_mesh = (fbx_node->skin >= 0 && fbx_node->mesh >= 0);
+	const bool requires_extra_node = (fbx_node->mesh >= 0 || fbx_node->camera >= 0);
 
 	Skeleton3D *active_skeleton = Object::cast_to<Skeleton3D>(p_scene_parent);
 	if (active_skeleton != skeleton) {
 		if (active_skeleton) {
 			// Should no longer be possible.
-			ERR_PRINT(vformat("glTF: Generating scene detected direct parented Skeletons at node %d", p_node_index));
-			BoneAttachment3D *bone_attachment = _generate_bone_attachment(p_state, active_skeleton, p_node_index, gltf_node->parent);
+			ERR_PRINT(vformat("FBX: Generating scene detected direct parented Skeletons at node %d", p_node_index));
+			BoneAttachment3D *bone_attachment = _generate_bone_attachment(p_state, active_skeleton, p_node_index, fbx_node->parent);
 			p_scene_parent->add_child(bone_attachment, true);
 			bone_attachment->set_owner(p_scene_root);
-			// There is no gltf_node that represent this, so just directly create a unique name
+			// There is no fbx_node that represent this, so just directly create a unique name
 			bone_attachment->set_name(_gen_unique_name(p_state, "BoneAttachment3D"));
 			// We change the scene_parent to our bone attachment now. We do not set current_node because we want to make the node
 			// and attach it to the bone_attachment
@@ -4436,8 +4365,8 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 			p_scene_parent->add_child(bone_attachment, true);
 			bone_attachment->set_owner(p_scene_root);
 
-			// There is no gltf_node that represent this, so just directly create a unique name
-			bone_attachment->set_name(gltf_node->get_name());
+			// There is no fbx_node that represent this, so just directly create a unique name
+			bone_attachment->set_name(fbx_node->get_name());
 
 			// We change the scene_parent to our bone attachment now. We do not set current_node because we want to make the node
 			// and attach it to the bone_attachment
@@ -4446,16 +4375,16 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 		// Check if any FBXDocumentExtension classes want to generate a node for us.
 		for (Ref<FBXDocumentExtension> ext : document_extensions) {
 			ERR_CONTINUE(ext.is_null());
-			current_node = ext->generate_scene_node(p_state, gltf_node, p_scene_parent);
+			current_node = ext->generate_scene_node(p_state, fbx_node, p_scene_parent);
 			if (current_node) {
 				break;
 			}
 		}
 		// If none of our FBXDocumentExtension classes generated us a node, we generate one.
 		if (!current_node) {
-			if (gltf_node->mesh >= 0) {
+			if (fbx_node->mesh >= 0) {
 				current_node = _generate_mesh_instance(p_state, p_node_index);
-			} else if (gltf_node->camera >= 0) {
+			} else if (fbx_node->camera >= 0) {
 				current_node = _generate_camera(p_state, p_node_index);
 			} else {
 				current_node = _generate_spatial(p_state, p_node_index);
@@ -4469,18 +4398,18 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 			current_node->propagate_call(StringName("set_owner"), args);
 		}
 		// Do not set transform here. Transform is already applied to our bone.
-		current_node->set_name(gltf_node->get_name());
+		current_node->set_name(fbx_node->get_name());
 	}
 
 	p_state->scene_nodes.insert(p_node_index, current_node);
 
-	for (int i = 0; i < gltf_node->children.size(); ++i) {
-		_generate_scene_node(p_state, gltf_node->children[i], active_skeleton, p_scene_root);
+	for (int i = 0; i < fbx_node->children.size(); ++i) {
+		_generate_scene_node(p_state, fbx_node->children[i], active_skeleton, p_scene_root);
 	}
 }
 
 template <class T>
-struct SceneFormatImporterGLTFInterpolate {
+struct SceneFormatImporterFBXInterpolate {
 	T lerp(const T &a, const T &b, float c) const {
 		return a + (b - a) * c;
 	}
@@ -4506,7 +4435,7 @@ struct SceneFormatImporterGLTFInterpolate {
 
 // thank you for existing, partial specialization
 template <>
-struct SceneFormatImporterGLTFInterpolate<Quaternion> {
+struct SceneFormatImporterFBXInterpolate<Quaternion> {
 	Quaternion lerp(const Quaternion &a, const Quaternion &b, const float c) const {
 		ERR_FAIL_COND_V_MSG(!a.is_normalized(), Quaternion(), "The quaternion \"a\" must be normalized.");
 		ERR_FAIL_COND_V_MSG(!b.is_normalized(), Quaternion(), "The quaternion \"b\" must be normalized.");
@@ -4545,7 +4474,7 @@ T FBXDocument::_interpolate_track(const Vector<real_t> &p_times, const Vector<T>
 		idx++;
 	}
 
-	SceneFormatImporterGLTFInterpolate<T> interp;
+	SceneFormatImporterFBXInterpolate<T> interp;
 
 	switch (p_interp) {
 		case FBXAnimation::INTERP_LINEAR: {
@@ -4631,7 +4560,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 
 		FBXNodeIndex node_index = track_i.key;
 
-		const Ref<FBXNode> gltf_node = p_state->nodes[track_i.key];
+		const Ref<FBXNode> fbx_node = p_state->nodes[track_i.key];
 
 		Node *root = p_animation_player->get_parent();
 		ERR_FAIL_COND(root == nullptr);
@@ -4645,12 +4574,12 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 			mesh_instance_node_path = node_path;
 		}
 
-		if (gltf_node->skeleton >= 0) {
-			const Skeleton3D *sk = p_state->skeletons[gltf_node->skeleton]->godot_skeleton;
+		if (fbx_node->skeleton >= 0) {
+			const Skeleton3D *sk = p_state->skeletons[fbx_node->skeleton]->godot_skeleton;
 			ERR_FAIL_COND(sk == nullptr);
 
 			const String path = p_animation_player->get_parent()->get_path_to(sk);
-			const String bone = gltf_node->get_name();
+			const String bone = fbx_node->get_name();
 			transform_node_path = path + ":" + bone;
 		} else {
 			transform_node_path = node_path;
@@ -4694,7 +4623,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		}
 
 		// Animated TRS properties will not affect a skinned mesh.
-		const bool transform_affects_skinned_mesh_instance = gltf_node->skeleton < 0 && gltf_node->skin >= 0;
+		const bool transform_affects_skinned_mesh_instance = fbx_node->skeleton < 0 && fbx_node->skin >= 0;
 		if ((track.rotation_track.values.size() || track.position_track.values.size() || track.scale_track.values.size()) && !transform_affects_skinned_mesh_instance) {
 			//make transform track
 			int base_idx = animation->get_track_count();
@@ -4815,8 +4744,8 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		}
 
 		for (int i = 0; i < track.weight_tracks.size(); i++) {
-			ERR_CONTINUE(gltf_node->mesh < 0 || gltf_node->mesh >= p_state->meshes.size());
-			Ref<FBXMesh> mesh = p_state->meshes[gltf_node->mesh];
+			ERR_CONTINUE(fbx_node->mesh < 0 || fbx_node->mesh >= p_state->meshes.size());
+			Ref<FBXMesh> mesh = p_state->meshes[fbx_node->mesh];
 			ERR_CONTINUE(mesh.is_null());
 			ERR_CONTINUE(mesh->get_mesh().is_null());
 			ERR_CONTINUE(mesh->get_mesh()->get_mesh().is_null());
@@ -4830,9 +4759,9 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 
 			// Only LINEAR and STEP (NEAREST) can be supported out of the box by Godot's Animation,
 			// the other modes have to be baked.
-			FBXAnimation::Interpolation gltf_interp = track.weight_tracks[i].interpolation;
-			if (gltf_interp == FBXAnimation::INTERP_LINEAR || gltf_interp == FBXAnimation::INTERP_STEP) {
-				animation->track_set_interpolation_type(track_idx, gltf_interp == FBXAnimation::INTERP_STEP ? Animation::INTERPOLATION_NEAREST : Animation::INTERPOLATION_LINEAR);
+			FBXAnimation::Interpolation fbx_interp = track.weight_tracks[i].interpolation;
+			if (fbx_interp == FBXAnimation::INTERP_LINEAR || fbx_interp == FBXAnimation::INTERP_STEP) {
+				animation->track_set_interpolation_type(track_idx, fbx_interp == FBXAnimation::INTERP_STEP ? Animation::INTERPOLATION_NEAREST : Animation::INTERPOLATION_LINEAR);
 				for (int j = 0; j < track.weight_tracks[i].times.size(); j++) {
 					const float t = track.weight_tracks[i].times[j];
 					const float attribs = track.weight_tracks[i].values[j];
@@ -4844,7 +4773,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 				double time = 0.0;
 				bool last = false;
 				while (true) {
-					real_t blend = _interpolate_track<real_t>(track.weight_tracks[i].times, track.weight_tracks[i].values, time, gltf_interp);
+					real_t blend = _interpolate_track<real_t>(track.weight_tracks[i].times, track.weight_tracks[i].values, time, fbx_interp);
 					animation->blend_shape_track_insert_key(track_idx, time - anim_start, blend);
 					if (last) {
 						break;
@@ -4898,38 +4827,38 @@ void FBXDocument::_convert_mesh_instances(Ref<FBXState> p_state) {
 		}
 		// At this point in the code, we know we have a Skeleton3D with at least one bone.
 		Ref<Skin> skin = mi->get_skin();
-		Ref<FBXSkin> gltf_skin;
-		gltf_skin.instantiate();
+		Ref<FBXSkin> fbx_skin;
+		fbx_skin.instantiate();
 		Array json_joints;
-		if (p_state->skeleton3d_to_gltf_skeleton.has(godot_skeleton->get_instance_id())) {
+		if (p_state->skeleton3d_to_fbx_skeleton.has(godot_skeleton->get_instance_id())) {
 			// This is a skinned mesh. If the mesh has no ARRAY_WEIGHTS or ARRAY_BONES, it will be invisible.
-			const FBXSkeletonIndex skeleton_gltf_i = p_state->skeleton3d_to_gltf_skeleton[godot_skeleton->get_instance_id()];
-			Ref<FBXSkeleton> gltf_skeleton = p_state->skeletons[skeleton_gltf_i];
+			const FBXSkeletonIndex skeleton_fbx_i = p_state->skeleton3d_to_fbx_skeleton[godot_skeleton->get_instance_id()];
+			Ref<FBXSkeleton> fbx_skeleton = p_state->skeletons[skeleton_fbx_i];
 			int bone_cnt = godot_skeleton->get_bone_count();
-			ERR_FAIL_COND(bone_cnt != gltf_skeleton->joints.size());
+			ERR_FAIL_COND(bone_cnt != fbx_skeleton->joints.size());
 
-			ObjectID gltf_skin_key;
+			ObjectID fbx_skin_key;
 			if (skin.is_valid()) {
-				gltf_skin_key = skin->get_instance_id();
+				fbx_skin_key = skin->get_instance_id();
 			}
-			ObjectID gltf_skel_key = godot_skeleton->get_instance_id();
-			FBXSkinIndex skin_gltf_i = -1;
-			FBXNodeIndex root_gltf_i = -1;
-			if (!gltf_skeleton->roots.is_empty()) {
-				root_gltf_i = gltf_skeleton->roots[0];
+			ObjectID fbx_skel_key = godot_skeleton->get_instance_id();
+			FBXSkinIndex skin_fbx_i = -1;
+			FBXNodeIndex root_fbx_i = -1;
+			if (!fbx_skeleton->roots.is_empty()) {
+				root_fbx_i = fbx_skeleton->roots[0];
 			}
-			if (p_state->skin_and_skeleton3d_to_gltf_skin.has(gltf_skin_key) && p_state->skin_and_skeleton3d_to_gltf_skin[gltf_skin_key].has(gltf_skel_key)) {
-				skin_gltf_i = p_state->skin_and_skeleton3d_to_gltf_skin[gltf_skin_key][gltf_skel_key];
+			if (p_state->skin_and_skeleton3d_to_fbx_skin.has(fbx_skin_key) && p_state->skin_and_skeleton3d_to_fbx_skin[fbx_skin_key].has(fbx_skel_key)) {
+				skin_fbx_i = p_state->skin_and_skeleton3d_to_fbx_skin[fbx_skin_key][fbx_skel_key];
 			} else {
 				if (skin.is_null()) {
 					// Note that gltf_skin_key should remain null, so these can share a reference.
 					skin = godot_skeleton->create_skin_from_rest_transforms();
 				}
-				gltf_skin.instantiate();
-				gltf_skin->godot_skin = skin;
-				gltf_skin->set_name(skin->get_name());
-				gltf_skin->skeleton = skeleton_gltf_i;
-				gltf_skin->skin_root = root_gltf_i;
+				fbx_skin.instantiate();
+				fbx_skin->godot_skin = skin;
+				fbx_skin->set_name(skin->get_name());
+				fbx_skin->skeleton = skeleton_fbx_i;
+				fbx_skin->skin_root = root_fbx_i;
 				//gltf_state->godot_to_gltf_node[skel_node]
 				HashMap<StringName, int> bone_name_to_idx;
 				for (int bone_i = 0; bone_i < bone_cnt; bone_i++) {
@@ -4946,22 +4875,22 @@ void FBXDocument::_convert_mesh_instances(Ref<FBXState> p_state) {
 					if (bind_name == StringName()) {
 						bind_name = godot_skeleton->get_bone_name(bone_i);
 					}
-					FBXNodeIndex skeleton_bone_i = gltf_skeleton->joints[bone_i];
-					gltf_skin->joints_original.push_back(skeleton_bone_i);
-					gltf_skin->joints.push_back(skeleton_bone_i);
-					gltf_skin->inverse_binds.push_back(bind_pose);
+					FBXNodeIndex skeleton_bone_i = fbx_skeleton->joints[bone_i];
+					fbx_skin->joints_original.push_back(skeleton_bone_i);
+					fbx_skin->joints.push_back(skeleton_bone_i);
+					fbx_skin->inverse_binds.push_back(bind_pose);
 					if (godot_skeleton->get_bone_parent(bone_i) == -1) {
-						gltf_skin->roots.push_back(skeleton_bone_i);
+						fbx_skin->roots.push_back(skeleton_bone_i);
 					}
-					gltf_skin->joint_i_to_bone_i[bind_i] = bone_i;
-					gltf_skin->joint_i_to_name[bind_i] = bind_name;
+					fbx_skin->joint_i_to_bone_i[bind_i] = bone_i;
+					fbx_skin->joint_i_to_name[bind_i] = bind_name;
 				}
-				skin_gltf_i = p_state->skins.size();
-				p_state->skins.push_back(gltf_skin);
-				p_state->skin_and_skeleton3d_to_gltf_skin[gltf_skin_key][gltf_skel_key] = skin_gltf_i;
+				skin_fbx_i = p_state->skins.size();
+				p_state->skins.push_back(fbx_skin);
+				p_state->skin_and_skeleton3d_to_fbx_skin[fbx_skin_key][fbx_skel_key] = skin_fbx_i;
 			}
-			node->skin = skin_gltf_i;
-			node->skeleton = skeleton_gltf_i;
+			node->skin = skin_fbx_i;
+			node->skeleton = skeleton_fbx_i;
 		}
 	}
 }
@@ -5016,8 +4945,8 @@ void FBXDocument::_process_mesh_instances(Ref<FBXState> p_state, Node *p_scene_r
 			}
 
 			const FBXSkeletonIndex skel_i = p_state->skins.write[node->skin]->skeleton;
-			Ref<FBXSkeleton> gltf_skeleton = p_state->skeletons.write[skel_i];
-			Skeleton3D *skeleton = gltf_skeleton->godot_skeleton;
+			Ref<FBXSkeleton> fbx_skeleton = p_state->skeletons.write[skel_i];
+			Skeleton3D *skeleton = fbx_skeleton->godot_skeleton;
 			ERR_CONTINUE_MSG(skeleton == nullptr, vformat("Unable to find Skeleton for node %d skin %d", node_i, skin_i));
 
 			mi->get_parent()->remove_child(mi);
@@ -5034,13 +4963,13 @@ void FBXDocument::_process_mesh_instances(Ref<FBXState> p_state, Node *p_scene_r
 FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state, FBXAnimation::Track p_track, Ref<Animation> p_animation, int32_t p_track_i, FBXNodeIndex p_node_i) {
 	Animation::InterpolationType interpolation = p_animation->track_get_interpolation_type(p_track_i);
 
-	FBXAnimation::Interpolation gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+	FBXAnimation::Interpolation fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 	if (interpolation == Animation::InterpolationType::INTERPOLATION_LINEAR) {
-		gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+		fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 	} else if (interpolation == Animation::InterpolationType::INTERPOLATION_NEAREST) {
-		gltf_interpolation = FBXAnimation::INTERP_STEP;
+		fbx_interpolation = FBXAnimation::INTERP_STEP;
 	} else if (interpolation == Animation::InterpolationType::INTERPOLATION_CUBIC) {
-		gltf_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
+		fbx_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
 	}
 	Animation::TrackType track_type = p_animation->track_get_type(p_track_i);
 	int32_t key_count = p_animation->track_get_key_count(p_track_i);
@@ -5052,8 +4981,8 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 	}
 	double anim_end = p_animation->get_length();
 	if (track_type == Animation::TYPE_SCALE_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+		if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+			fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 			p_track.scale_track.times.clear();
 			p_track.scale_track.values.clear();
 			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5077,7 +5006,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		} else {
 			p_track.scale_track.times = times;
-			p_track.scale_track.interpolation = gltf_interpolation;
+			p_track.scale_track.interpolation = fbx_interpolation;
 			p_track.scale_track.values.resize(key_count);
 			for (int32_t key_i = 0; key_i < key_count; key_i++) {
 				Vector3 scale;
@@ -5087,8 +5016,8 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		}
 	} else if (track_type == Animation::TYPE_POSITION_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+		if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+			fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 			p_track.position_track.times.clear();
 			p_track.position_track.values.clear();
 			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5113,7 +5042,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 		} else {
 			p_track.position_track.times = times;
 			p_track.position_track.values.resize(key_count);
-			p_track.position_track.interpolation = gltf_interpolation;
+			p_track.position_track.interpolation = fbx_interpolation;
 			for (int32_t key_i = 0; key_i < key_count; key_i++) {
 				Vector3 position;
 				Error err = p_animation->position_track_get_key(p_track_i, key_i, &position);
@@ -5122,8 +5051,8 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		}
 	} else if (track_type == Animation::TYPE_ROTATION_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+		if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+			fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 			p_track.rotation_track.times.clear();
 			p_track.rotation_track.values.clear();
 			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5148,7 +5077,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 		} else {
 			p_track.rotation_track.times = times;
 			p_track.rotation_track.values.resize(key_count);
-			p_track.rotation_track.interpolation = gltf_interpolation;
+			p_track.rotation_track.interpolation = fbx_interpolation;
 			for (int32_t key_i = 0; key_i < key_count; key_i++) {
 				Quaternion rotation;
 				Error err = p_animation->rotation_track_get_key(p_track_i, key_i, &rotation);
@@ -5158,12 +5087,12 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 		}
 	} else if (track_type == Animation::TYPE_VALUE) {
 		if (path.contains(":position")) {
-			p_track.position_track.interpolation = gltf_interpolation;
+			p_track.position_track.interpolation = fbx_interpolation;
 			p_track.position_track.times = times;
 			p_track.position_track.values.resize(key_count);
 
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+			if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+				fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 				p_track.position_track.times.clear();
 				p_track.position_track.values.clear();
 				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5192,11 +5121,11 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 				}
 			}
 		} else if (path.contains(":rotation")) {
-			p_track.rotation_track.interpolation = gltf_interpolation;
+			p_track.rotation_track.interpolation = fbx_interpolation;
 			p_track.rotation_track.times = times;
 			p_track.rotation_track.values.resize(key_count);
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+			if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+				fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 				p_track.rotation_track.times.clear();
 				p_track.rotation_track.values.clear();
 				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5226,13 +5155,13 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		} else if (path.contains(":scale")) {
 			p_track.scale_track.times = times;
-			p_track.scale_track.interpolation = gltf_interpolation;
+			p_track.scale_track.interpolation = fbx_interpolation;
 
 			p_track.scale_track.values.resize(key_count);
-			p_track.scale_track.interpolation = gltf_interpolation;
+			p_track.scale_track.interpolation = fbx_interpolation;
 
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+			if (fbx_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
+				fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 				p_track.scale_track.times.clear();
 				p_track.scale_track.values.clear();
 				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
@@ -5265,7 +5194,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 		const int32_t keys = anim_end * BAKE_FPS;
 		if (path.contains(":scale")) {
 			if (!p_track.scale_track.times.size()) {
-				p_track.scale_track.interpolation = gltf_interpolation;
+				p_track.scale_track.interpolation = fbx_interpolation;
 				Vector<real_t> new_times;
 				new_times.resize(keys);
 				for (int32_t key_i = 0; key_i < keys; key_i++) {
@@ -5293,7 +5222,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		} else if (path.contains(":position")) {
 			if (!p_track.position_track.times.size()) {
-				p_track.position_track.interpolation = gltf_interpolation;
+				p_track.position_track.interpolation = fbx_interpolation;
 				Vector<real_t> new_times;
 				new_times.resize(keys);
 				for (int32_t key_i = 0; key_i < keys; key_i++) {
@@ -5317,7 +5246,7 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 			}
 		} else if (path.contains(":rotation")) {
 			if (!p_track.rotation_track.times.size()) {
-				p_track.rotation_track.interpolation = gltf_interpolation;
+				p_track.rotation_track.interpolation = fbx_interpolation;
 				Vector<real_t> new_times;
 				new_times.resize(keys);
 				for (int32_t key_i = 0; key_i < keys; key_i++) {
@@ -5347,9 +5276,9 @@ FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state,
 
 void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, String p_animation_track_name) {
 	Ref<Animation> animation = p_animation_player->get_animation(p_animation_track_name);
-	Ref<FBXAnimation> gltf_animation;
-	gltf_animation.instantiate();
-	gltf_animation->set_name(_gen_unique_name(p_state, p_animation_track_name));
+	Ref<FBXAnimation> fbx_animation;
+	fbx_animation.instantiate();
+	fbx_animation->set_name(_gen_unique_name(p_state, p_animation_track_name));
 	for (int32_t track_i = 0; track_i < animation->get_track_count(); track_i++) {
 		if (!animation->track_is_enabled(track_i)) {
 			continue;
@@ -5365,13 +5294,13 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 			for (const KeyValue<FBXNodeIndex, Node *> &position_scene_node_i : p_state->scene_nodes) {
 				if (position_scene_node_i.value == node) {
 					FBXNodeIndex node_index = position_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator position_track_i = gltf_animation->get_tracks().find(node_index);
+					HashMap<int, FBXAnimation::Track>::Iterator position_track_i = fbx_animation->get_tracks().find(node_index);
 					FBXAnimation::Track track;
 					if (position_track_i) {
 						track = position_track_i->value;
 					}
 					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
+					fbx_animation->get_tracks().insert(node_index, track);
 				}
 			}
 		} else if (String(final_track_path).contains(":rotation_degrees")) {
@@ -5382,13 +5311,13 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 			for (const KeyValue<FBXNodeIndex, Node *> &rotation_degree_scene_node_i : p_state->scene_nodes) {
 				if (rotation_degree_scene_node_i.value == node) {
 					FBXNodeIndex node_index = rotation_degree_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator rotation_degree_track_i = gltf_animation->get_tracks().find(node_index);
+					HashMap<int, FBXAnimation::Track>::Iterator rotation_degree_track_i = fbx_animation->get_tracks().find(node_index);
 					FBXAnimation::Track track;
 					if (rotation_degree_track_i) {
 						track = rotation_degree_track_i->value;
 					}
 					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
+					fbx_animation->get_tracks().insert(node_index, track);
 				}
 			}
 		} else if (String(final_track_path).contains(":scale")) {
@@ -5399,13 +5328,13 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 			for (const KeyValue<FBXNodeIndex, Node *> &scale_scene_node_i : p_state->scene_nodes) {
 				if (scale_scene_node_i.value == node) {
 					FBXNodeIndex node_index = scale_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator scale_track_i = gltf_animation->get_tracks().find(node_index);
+					HashMap<int, FBXAnimation::Track>::Iterator scale_track_i = fbx_animation->get_tracks().find(node_index);
 					FBXAnimation::Track track;
 					if (scale_track_i) {
 						track = scale_track_i->value;
 					}
 					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
+					fbx_animation->get_tracks().insert(node_index, track);
 				}
 			}
 		} else if (String(final_track_path).contains(":transform")) {
@@ -5417,7 +5346,7 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 				if (transform_track_i.value == node) {
 					FBXAnimation::Track track;
 					track = _convert_animation_track(p_state, track, animation, track_i, transform_track_i.key);
-					gltf_animation->get_tracks().insert(transform_track_i.key, track);
+					fbx_animation->get_tracks().insert(transform_track_i.key, track);
 				}
 			}
 		} else if (String(final_track_path).contains(":") && animation->track_get_type(track_i) == Animation::TYPE_BLEND_SHAPE) {
@@ -5439,8 +5368,8 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 				}
 			}
 			ERR_CONTINUE(mesh_index == -1);
-			HashMap<int, FBXAnimation::Track> &tracks = gltf_animation->get_tracks();
-			FBXAnimation::Track track = gltf_animation->get_tracks().has(mesh_index) ? gltf_animation->get_tracks()[mesh_index] : FBXAnimation::Track();
+			HashMap<int, FBXAnimation::Track> &tracks = fbx_animation->get_tracks();
+			FBXAnimation::Track track = fbx_animation->get_tracks().has(mesh_index) ? fbx_animation->get_tracks()[mesh_index] : FBXAnimation::Track();
 			if (!tracks.has(mesh_index)) {
 				for (int32_t shape_i = 0; shape_i < mesh->get_blend_shape_count(); shape_i++) {
 					String shape_name = mesh->get_blend_shape_name(shape_i);
@@ -5457,17 +5386,17 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 						continue;
 					}
 					Animation::InterpolationType interpolation = animation->track_get_interpolation_type(track_i);
-					FBXAnimation::Interpolation gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+					FBXAnimation::Interpolation fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 					if (interpolation == Animation::InterpolationType::INTERPOLATION_LINEAR) {
-						gltf_interpolation = FBXAnimation::INTERP_LINEAR;
+						fbx_interpolation = FBXAnimation::INTERP_LINEAR;
 					} else if (interpolation == Animation::InterpolationType::INTERPOLATION_NEAREST) {
-						gltf_interpolation = FBXAnimation::INTERP_STEP;
+						fbx_interpolation = FBXAnimation::INTERP_STEP;
 					} else if (interpolation == Animation::InterpolationType::INTERPOLATION_CUBIC) {
-						gltf_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
+						fbx_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
 					}
 					int32_t key_count = animation->track_get_key_count(shape_track_i);
 					FBXAnimation::Channel<real_t> weight;
-					weight.interpolation = gltf_interpolation;
+					weight.interpolation = fbx_interpolation;
 					weight.times.resize(key_count);
 					for (int32_t time_i = 0; time_i < key_count; time_i++) {
 						weight.times.write[time_i] = animation->track_get_key_time(shape_track_i, time_i);
@@ -5494,26 +5423,26 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 			if (!skeleton) {
 				continue;
 			}
-			FBXSkeletonIndex skeleton_gltf_i = -1;
+			FBXSkeletonIndex skeleton_fbx_i = -1;
 			for (FBXSkeletonIndex skeleton_i = 0; skeleton_i < p_state->skeletons.size(); skeleton_i++) {
 				if (p_state->skeletons[skeleton_i]->godot_skeleton == cast_to<Skeleton3D>(godot_node)) {
 					skeleton = p_state->skeletons[skeleton_i]->godot_skeleton;
-					skeleton_gltf_i = skeleton_i;
+					skeleton_fbx_i = skeleton_i;
 					ERR_CONTINUE(!skeleton);
-					Ref<FBXSkeleton> skeleton_gltf = p_state->skeletons[skeleton_gltf_i];
+					Ref<FBXSkeleton> skeleton_fbx = p_state->skeletons[skeleton_fbx_i];
 					int32_t bone = skeleton->find_bone(suffix);
 					ERR_CONTINUE_MSG(bone == -1, vformat("Cannot find the bone %s.", suffix));
-					if (!skeleton_gltf->godot_bone_node.has(bone)) {
+					if (!skeleton_fbx->godot_bone_node.has(bone)) {
 						continue;
 					}
-					FBXNodeIndex node_i = skeleton_gltf->godot_bone_node[bone];
-					HashMap<int, FBXAnimation::Track>::Iterator property_track_i = gltf_animation->get_tracks().find(node_i);
+					FBXNodeIndex node_i = skeleton_fbx->godot_bone_node[bone];
+					HashMap<int, FBXAnimation::Track>::Iterator property_track_i = fbx_animation->get_tracks().find(node_i);
 					FBXAnimation::Track track;
 					if (property_track_i) {
 						track = property_track_i->value;
 					}
 					track = _convert_animation_track(p_state, track, animation, track_i, node_i);
-					gltf_animation->get_tracks()[node_i] = track;
+					fbx_animation->get_tracks()[node_i] = track;
 				}
 			}
 		} else if (!String(final_track_path).contains(":")) {
@@ -5523,20 +5452,20 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 			for (const KeyValue<FBXNodeIndex, Node *> &scene_node_i : p_state->scene_nodes) {
 				if (scene_node_i.value == godot_node) {
 					FBXNodeIndex node_i = scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator node_track_i = gltf_animation->get_tracks().find(node_i);
+					HashMap<int, FBXAnimation::Track>::Iterator node_track_i = fbx_animation->get_tracks().find(node_i);
 					FBXAnimation::Track track;
 					if (node_track_i) {
 						track = node_track_i->value;
 					}
 					track = _convert_animation_track(p_state, track, animation, track_i, node_i);
-					gltf_animation->get_tracks()[node_i] = track;
+					fbx_animation->get_tracks()[node_i] = track;
 					break;
 				}
 			}
 		}
 	}
-	if (gltf_animation->get_tracks().size()) {
-		p_state->animations.push_back(gltf_animation);
+	if (fbx_animation->get_tracks().size()) {
+		p_state->animations.push_back(fbx_animation);
 	}
 }
 
@@ -5635,9 +5564,9 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 	ERR_FAIL_NULL_V(p_state, nullptr);
 	ERR_FAIL_INDEX_V(0, p_state->root_nodes.size(), nullptr);
 	Error err = OK;
-	FBXNodeIndex gltf_root = p_state->root_nodes.write[0];
-	Node *gltf_root_node = p_state->get_scene_node(gltf_root);
-	Node *root = gltf_root_node->get_parent();
+	FBXNodeIndex fbx_root = p_state->root_nodes.write[0];
+	Node *fbx_root_node = p_state->get_scene_node(fbx_root);
+	Node *root = fbx_root_node->get_parent();
 	ERR_FAIL_NULL_V(root, nullptr);
 	_process_mesh_instances(p_state, root);
 	if (p_state->get_create_animations() && p_state->animations.size()) {
@@ -5657,8 +5586,8 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 			ERR_CONTINUE(E.key >= nodes.size());
 			ERR_CONTINUE(E.key < 0);
 			Dictionary node_json = nodes[E.key];
-			Ref<FBXNode> gltf_node = p_state->nodes[E.key];
-			err = ext->import_node(p_state, gltf_node, node_json, E.value);
+			Ref<FBXNode> fbx_node = p_state->nodes[E.key];
+			err = ext->import_node(p_state, fbx_node, node_json, E.value);
 			ERR_CONTINUE(err != OK);
 		}
 	}
@@ -5859,7 +5788,7 @@ Error FBXDocument::_parse_fbx_extensions(Ref<FBXState> p_state) {
 	Error ret = OK;
 	for (int i = 0; i < p_state->extensions_required.size(); i++) {
 		if (!supported_extensions.has(p_state->extensions_required[i])) {
-			ERR_PRINT("GLTF: Can't import file '" + p_state->filename + "', required extension '" + String(p_state->extensions_required[i]) + "' is not supported. Are you missing a FBXDocumentExtension plugin?");
+			ERR_PRINT("FBX: Can't import file '" + p_state->filename + "', required extension '" + String(p_state->extensions_required[i]) + "' is not supported. Are you missing a FBXDocumentExtension plugin?");
 			ret = ERR_UNAVAILABLE;
 		}
 	}

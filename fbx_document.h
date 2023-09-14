@@ -252,8 +252,6 @@ private:
 			Ref<Animation> p_animation,
 			int32_t p_track_i,
 			FBXNodeIndex p_node_i);
-	Error _encode_buffer_bins(Ref<FBXState> p_state, const String &p_path);
-	Error _encode_buffer_glb(Ref<FBXState> p_state, const String &p_path);
 public:
 	// https://www.itu.int/rec/R-REC-BT.601
 	// https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.601-7-201103-I!!PDF-E.pdf
