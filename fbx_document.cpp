@@ -78,6 +78,17 @@
 #include <cstdint>
 #include <limits>
 
+static size_t _file_access_read_fn(void *user, void *data, size_t size) {
+	FileAccess *file = (FileAccess*)user;
+	return (size_t)file->get_buffer((uint8_t*)data, (uint64_t)size);
+}
+
+static bool _file_access_skip_fn(void *user, size_t size) {
+	FileAccess *file = (FileAccess*)user;
+	file->seek(file->get_position() + size);
+	return true;
+}
+
 static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 	Ref<ImporterMesh> importer_mesh;
 	importer_mesh.instantiate();
@@ -5432,8 +5443,13 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 
 	ufbx_load_opts opts = {};
 	ufbx_error error;
-	Vector<uint8_t> data = p_file->get_buffer(p_file->get_length());
-	ufbx_scene *scene = ufbx_load_memory(data.ptr(), data.size(), &opts, &error);
+
+	ufbx_stream file_stream = {};
+	file_stream.read_fn = &_file_access_read_fn;
+	file_stream.skip_fn = &_file_access_skip_fn;
+	file_stream.user = p_file.ptr();
+
+	ufbx_scene *scene = ufbx_load_stream(&file_stream, &opts, &error);
 	if (!scene) {
 		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
 		return FAILED;
