@@ -42,9 +42,14 @@
 #include "structures/fbx_texture.h"
 #include "structures/fbx_texture_sampler.h"
 
+#include "thirdparty/ufbx/ufbx.h"
+
 class FBXState : public Resource {
 	GDCLASS(FBXState, Resource);
 	friend class FBXDocument;
+
+	// Smart pointer that holds the loaded scene.
+	ufbx_scene_ref scene;
 
 	String base_path;
 	String filename;
