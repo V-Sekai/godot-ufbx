@@ -5718,6 +5718,7 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 }
 
 Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32_t p_flags, String p_base_path) {
+	ERR_FAIL_COND_V(p_path.is_empty(), ERR_FILE_NOT_FOUND);
 	// TODO Add missing texture and missing .bin file paths to r_missing_deps 2021-09-10 fire
 	if (p_state == Ref<FBXState>()) {
 		p_state.instantiate();
