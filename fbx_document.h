@@ -279,9 +279,8 @@ public:
 	Node *generate_scene(Ref<FBXState> p_state, float p_bake_fps = 30.0f, bool p_trimming = false, bool p_remove_immutable_tracks = true);
 
 public:
-	Error _parse_gltf_state(Ref<FBXState> p_state, const String &p_search_path);
-	Error _parse_asset_header(Ref<FBXState> p_state);
-	Error _parse_gltf_extensions(Ref<FBXState> p_state);
+	Error _parse_fbx_state(Ref<FBXState> p_state, const String &p_search_path);
+	Error _parse_fbx_extensions(Ref<FBXState> p_state);
 	void _process_mesh_instances(Ref<FBXState> p_state, Node *p_scene_root);
 	void _generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root);
 	void _generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root);
@@ -291,53 +290,53 @@ public:
 	FBXCameraIndex _convert_camera(Ref<FBXState> p_state, Camera3D *p_camera);
 	void _convert_spatial(Ref<FBXState> p_state, Node3D *p_spatial, Ref<FBXNode> p_node);
 	void _convert_scene_node(Ref<FBXState> p_state, Node *p_current,
-			const FBXNodeIndex p_gltf_current,
-			const FBXNodeIndex p_gltf_root);
+			const FBXNodeIndex p_fbx_current,
+			const FBXNodeIndex p_fbx_root);
 
 #ifdef MODULE_CSG_ENABLED
-	void _convert_csg_shape_to_gltf(CSGShape3D *p_current, FBXNodeIndex p_gltf_parent, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
+	void _convert_csg_shape_to_fbx(CSGShape3D *p_current, FBXNodeIndex p_gltf_parent, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
 #endif // MODULE_CSG_ENABLED
 
-	void _create_gltf_node(Ref<FBXState> p_state,
+	void _create_fbx_node(Ref<FBXState> p_state,
 			Node *p_scene_parent,
 			FBXNodeIndex p_current_node_i,
 			FBXNodeIndex p_parent_node_index,
 			FBXNodeIndex p_root_gltf_node,
 			Ref<FBXNode> p_gltf_node);
-	void _convert_animation_player_to_gltf(
+	void _convert_animation_player_to_fbx(
 			AnimationPlayer *p_animation_player, Ref<FBXState> p_state,
 			FBXNodeIndex p_gltf_current,
 			FBXNodeIndex p_gltf_root_index,
 			Ref<FBXNode> p_gltf_node, Node *p_scene_parent);
 	void _check_visibility(Node *p_node, bool &r_retflag);
-	void _convert_camera_to_gltf(Camera3D *p_camera, Ref<FBXState> p_state,
+	void _convert_camera_to_fbx(Camera3D *p_camera, Ref<FBXState> p_state,
 			Ref<FBXNode> p_gltf_node);
 #ifdef MODULE_GRIDMAP_ENABLED
-	void _convert_grid_map_to_gltf(
+	void _convert_grid_map_to_fbx(
 			GridMap *p_grid_map,
 			FBXNodeIndex p_parent_node_index,
 			FBXNodeIndex p_root_node_index,
 			Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
 #endif // MODULE_GRIDMAP_ENABLED
-	void _convert_multi_mesh_instance_to_gltf(
+	void _convert_multi_mesh_instance_to_fbx(
 			MultiMeshInstance3D *p_multi_mesh_instance,
 			FBXNodeIndex p_parent_node_index,
 			FBXNodeIndex p_root_node_index,
 			Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
-	void _convert_skeleton_to_gltf(
+	void _convert_skeleton_to_fbx(
 			Skeleton3D *p_scene_parent, Ref<FBXState> p_state,
 			FBXNodeIndex p_parent_node_index,
 			FBXNodeIndex p_root_node_index,
 			Ref<FBXNode> p_gltf_node);
-	void _convert_bone_attachment_to_gltf(BoneAttachment3D *p_bone_attachment,
+	void _convert_bone_attachment_to_fbx(BoneAttachment3D *p_bone_attachment,
 			Ref<FBXState> p_state,
 			FBXNodeIndex p_parent_node_index,
 			FBXNodeIndex p_root_node_index,
 			Ref<FBXNode> p_gltf_node);
-	void _convert_mesh_instance_to_gltf(MeshInstance3D *p_mesh_instance,
+	void _convert_mesh_instance_to_fbx(MeshInstance3D *p_mesh_instance,
 			Ref<FBXState> p_state,
 			Ref<FBXNode> p_gltf_node);
-	FBXMeshIndex _convert_mesh_to_gltf(Ref<FBXState> p_state,
+	FBXMeshIndex _convert_mesh_to_fbx(Ref<FBXState> p_state,
 			MeshInstance3D *p_mesh_instance);
 	void _convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, String p_animation_track_name);
 	Error _parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file);

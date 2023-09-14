@@ -3896,7 +3896,7 @@ BoneAttachment3D *FBXDocument::_generate_bone_attachment(Ref<FBXState> p_state, 
 	return bone_attachment;
 }
 
-FBXMeshIndex FBXDocument::_convert_mesh_to_gltf(Ref<FBXState> p_state, MeshInstance3D *p_mesh_instance) {
+FBXMeshIndex FBXDocument::_convert_mesh_to_fbx(Ref<FBXState> p_state, MeshInstance3D *p_mesh_instance) {
 	ERR_FAIL_NULL_V(p_mesh_instance, -1);
 	if (p_mesh_instance->get_mesh().is_null()) {
 		return -1;
@@ -4004,37 +4004,37 @@ void FBXDocument::_convert_scene_node(Ref<FBXState> p_state, Node *p_current, co
 	}
 	if (cast_to<MeshInstance3D>(p_current)) {
 		MeshInstance3D *mi = cast_to<MeshInstance3D>(p_current);
-		_convert_mesh_instance_to_gltf(mi, p_state, gltf_node);
+		_convert_mesh_instance_to_fbx(mi, p_state, gltf_node);
 	} else if (cast_to<BoneAttachment3D>(p_current)) {
 		BoneAttachment3D *bone = cast_to<BoneAttachment3D>(p_current);
-		_convert_bone_attachment_to_gltf(bone, p_state, p_gltf_parent, p_gltf_root, gltf_node);
+		_convert_bone_attachment_to_fbx(bone, p_state, p_gltf_parent, p_gltf_root, gltf_node);
 		return;
 	} else if (cast_to<Skeleton3D>(p_current)) {
 		Skeleton3D *skel = cast_to<Skeleton3D>(p_current);
-		_convert_skeleton_to_gltf(skel, p_state, p_gltf_parent, p_gltf_root, gltf_node);
+		_convert_skeleton_to_fbx(skel, p_state, p_gltf_parent, p_gltf_root, gltf_node);
 		// We ignore the Godot Engine node that is the skeleton.
 		return;
 	} else if (cast_to<MultiMeshInstance3D>(p_current)) {
 		MultiMeshInstance3D *multi = cast_to<MultiMeshInstance3D>(p_current);
-		_convert_multi_mesh_instance_to_gltf(multi, p_gltf_parent, p_gltf_root, gltf_node, p_state);
+		_convert_multi_mesh_instance_to_fbx(multi, p_gltf_parent, p_gltf_root, gltf_node, p_state);
 #ifdef MODULE_CSG_ENABLED
 	} else if (cast_to<CSGShape3D>(p_current)) {
 		CSGShape3D *shape = cast_to<CSGShape3D>(p_current);
 		if (shape->get_parent() && shape->is_root_shape()) {
-			_convert_csg_shape_to_gltf(shape, p_gltf_parent, gltf_node, p_state);
+			_convert_csg_shape_to_fbx(shape, p_gltf_parent, gltf_node, p_state);
 		}
 #endif // MODULE_CSG_ENABLED
 #ifdef MODULE_GRIDMAP_ENABLED
 	} else if (cast_to<GridMap>(p_current)) {
 		GridMap *gridmap = Object::cast_to<GridMap>(p_current);
-		_convert_grid_map_to_gltf(gridmap, p_gltf_parent, p_gltf_root, gltf_node, p_state);
+		_convert_grid_map_to_fbx(gridmap, p_gltf_parent, p_gltf_root, gltf_node, p_state);
 #endif // MODULE_GRIDMAP_ENABLED
 	} else if (cast_to<Camera3D>(p_current)) {
 		Camera3D *camera = Object::cast_to<Camera3D>(p_current);
-		_convert_camera_to_gltf(camera, p_state, gltf_node);
+		_convert_camera_to_fbx(camera, p_state, gltf_node);
 	} else if (cast_to<AnimationPlayer>(p_current)) {
 		AnimationPlayer *animation_player = Object::cast_to<AnimationPlayer>(p_current);
-		_convert_animation_player_to_gltf(animation_player, p_state, p_gltf_parent, p_gltf_root, gltf_node, p_current);
+		_convert_animation_player_to_fbx(animation_player, p_state, p_gltf_parent, p_gltf_root, gltf_node, p_current);
 	}
 	for (Ref<FBXDocumentExtension> ext : document_extensions) {
 		ERR_CONTINUE(ext.is_null());
@@ -4046,14 +4046,14 @@ void FBXDocument::_convert_scene_node(Ref<FBXState> p_state, Node *p_current, co
 		gltf_root = current_node_i;
 		p_state->root_nodes.push_back(gltf_root);
 	}
-	_create_gltf_node(p_state, p_current, current_node_i, p_gltf_parent, gltf_root, gltf_node);
+	_create_fbx_node(p_state, p_current, current_node_i, p_gltf_parent, gltf_root, gltf_node);
 	for (int node_i = 0; node_i < p_current->get_child_count(); node_i++) {
 		_convert_scene_node(p_state, p_current->get_child(node_i), current_node_i, gltf_root);
 	}
 }
 
 #ifdef MODULE_CSG_ENABLED
-void FBXDocument::_convert_csg_shape_to_gltf(CSGShape3D *p_current, FBXNodeIndex p_gltf_parent, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state) {
+void FBXDocument::_convert_csg_shape_to_fbx(CSGShape3D *p_current, FBXNodeIndex p_gltf_parent, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state) {
 	CSGShape3D *csg = p_current;
 	csg->call("_update_shape");
 	Array meshes = csg->get_meshes();
@@ -4093,7 +4093,7 @@ void FBXDocument::_convert_csg_shape_to_gltf(CSGShape3D *p_current, FBXNodeIndex
 }
 #endif // MODULE_CSG_ENABLED
 
-void FBXDocument::_create_gltf_node(Ref<FBXState> p_state, Node *p_scene_parent, FBXNodeIndex p_current_node_i,
+void FBXDocument::_create_fbx_node(Ref<FBXState> p_state, Node *p_scene_parent, FBXNodeIndex p_current_node_i,
 		FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_gltf_node, Ref<FBXNode> p_gltf_node) {
 	p_state->scene_nodes.insert(p_current_node_i, p_scene_parent);
 	p_state->nodes.push_back(p_gltf_node);
@@ -4105,7 +4105,7 @@ void FBXDocument::_create_gltf_node(Ref<FBXState> p_state, Node *p_scene_parent,
 	p_state->nodes.write[p_parent_node_index]->children.push_back(p_current_node_i);
 }
 
-void FBXDocument::_convert_animation_player_to_gltf(AnimationPlayer *p_animation_player, Ref<FBXState> p_state, FBXNodeIndex p_gltf_current, FBXNodeIndex p_gltf_root_index, Ref<FBXNode> p_gltf_node, Node *p_scene_parent) {
+void FBXDocument::_convert_animation_player_to_fbx(AnimationPlayer *p_animation_player, Ref<FBXState> p_state, FBXNodeIndex p_gltf_current, FBXNodeIndex p_gltf_root_index, Ref<FBXNode> p_gltf_node, Node *p_scene_parent) {
 	ERR_FAIL_COND(!p_animation_player);
 	p_state->animation_players.push_back(p_animation_player);
 	print_verbose(String("glTF: Converting animation player: ") + p_animation_player->get_name());
@@ -4124,7 +4124,7 @@ void FBXDocument::_check_visibility(Node *p_node, bool &r_retflag) {
 	r_retflag = false;
 }
 
-void FBXDocument::_convert_camera_to_gltf(Camera3D *camera, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
+void FBXDocument::_convert_camera_to_fbx(Camera3D *camera, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
 	ERR_FAIL_COND(!camera);
 	FBXCameraIndex camera_index = _convert_camera(p_state, camera);
 	if (camera_index != -1) {
@@ -4133,7 +4133,7 @@ void FBXDocument::_convert_camera_to_gltf(Camera3D *camera, Ref<FBXState> p_stat
 }
 
 #ifdef MODULE_GRIDMAP_ENABLED
-void FBXDocument::_convert_grid_map_to_gltf(GridMap *p_grid_map, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state) {
+void FBXDocument::_convert_grid_map_to_fbx(GridMap *p_grid_map, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state) {
 	Array cells = p_grid_map->get_used_cells();
 	for (int32_t k = 0; k < cells.size(); k++) {
 		FBXNode *new_gltf_node = memnew(FBXNode);
@@ -4162,7 +4162,7 @@ void FBXDocument::_convert_grid_map_to_gltf(GridMap *p_grid_map, FBXNodeIndex p_
 }
 #endif // MODULE_GRIDMAP_ENABLED
 
-void FBXDocument::_convert_multi_mesh_instance_to_gltf(
+void FBXDocument::_convert_multi_mesh_instance_to_fbx(
 		MultiMeshInstance3D *p_multi_mesh_instance,
 		FBXNodeIndex p_parent_node_index,
 		FBXNodeIndex p_root_node_index,
@@ -4231,7 +4231,7 @@ void FBXDocument::_convert_multi_mesh_instance_to_gltf(
 	}
 }
 
-void FBXDocument::_convert_skeleton_to_gltf(Skeleton3D *p_skeleton3d, Ref<FBXState> p_state, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node) {
+void FBXDocument::_convert_skeleton_to_fbx(Skeleton3D *p_skeleton3d, Ref<FBXState> p_state, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node) {
 	Skeleton3D *skeleton = p_skeleton3d;
 	Ref<FBXSkeleton> gltf_skeleton;
 	gltf_skeleton.instantiate();
@@ -4285,7 +4285,7 @@ void FBXDocument::_convert_skeleton_to_gltf(Skeleton3D *p_skeleton3d, Ref<FBXSta
 	}
 }
 
-void FBXDocument::_convert_bone_attachment_to_gltf(BoneAttachment3D *p_bone_attachment, Ref<FBXState> p_state, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node) {
+void FBXDocument::_convert_bone_attachment_to_fbx(BoneAttachment3D *p_bone_attachment, Ref<FBXState> p_state, FBXNodeIndex p_parent_node_index, FBXNodeIndex p_root_node_index, Ref<FBXNode> p_gltf_node) {
 	Skeleton3D *skeleton;
 	// Note that relative transforms to external skeletons and pose overrides are not supported.
 	if (p_bone_attachment->get_use_external_skeleton()) {
@@ -4316,8 +4316,8 @@ void FBXDocument::_convert_bone_attachment_to_gltf(BoneAttachment3D *p_bone_atta
 	}
 }
 
-void FBXDocument::_convert_mesh_instance_to_gltf(MeshInstance3D *p_scene_parent, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
-	FBXMeshIndex gltf_mesh_index = _convert_mesh_to_gltf(p_state, p_scene_parent);
+void FBXDocument::_convert_mesh_instance_to_fbx(MeshInstance3D *p_scene_parent, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
+	FBXMeshIndex gltf_mesh_index = _convert_mesh_to_fbx(p_state, p_scene_parent);
 	if (gltf_mesh_index != -1) {
 		p_gltf_node->mesh = gltf_mesh_index;
 	}
@@ -5567,43 +5567,17 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	}	
 	ERR_FAIL_NULL_V(scene, err);
 	ufbx_free_scene(scene);
+	document_extensions.clear();
+	for (Ref<FBXDocumentExtension> ext : all_document_extensions) {
+		ERR_CONTINUE(ext.is_null());
+		err = ext->import_preflight(p_state, p_state->json["extensionsUsed"]);
+		if (err == OK) {
+			document_extensions.push_back(ext);
+		}
+	}
 
-	// p_file->seek(0);
-	// uint32_t magic = p_file->get_32();
-	// if (magic == 0x46546C67) {
-	// 	//binary file
-	// 	//text file
-	// 	p_file->seek(0);
-	// 	err = _parse_glb(p_file, p_state);
-	// 	if (err != OK) {
-	// 		return err;
-	// 	}
-	// } else {
-	// 	p_file->seek(0);
-	// 	String text = p_file->get_as_utf8_string();
-	// 	JSON json;
-	// 	err = json.parse(text);
-	// 	if (err != OK) {
-	// 		_err_print_error("", "", json.get_error_line(), json.get_error_message().utf8().get_data(), false, ERR_HANDLER_SCRIPT);
-	// 	}
-	// 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-	// 	p_state->json = json.get_data();
-	// }
-
-	// err = _parse_asset_header(p_state);
-	// ERR_FAIL_COND_V(err != OK, err);
-
-	// document_extensions.clear();
-	// for (Ref<FBXDocumentExtension> ext : all_document_extensions) {
-	// 	ERR_CONTINUE(ext.is_null());
-	// 	err = ext->import_preflight(p_state, p_state->json["extensionsUsed"]);
-	// 	if (err == OK) {
-	// 		document_extensions.push_back(ext);
-	// 	}
-	// }
-
-	// err = _parse_gltf_state(p_state, p_path);
-	// ERR_FAIL_COND_V(err != OK, err);
+	err = _parse_fbx_state(p_state, p_path);
+	ERR_FAIL_COND_V(err != OK, err);
 
 	return OK;
 }
@@ -5740,28 +5714,11 @@ Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_pat
 	return OK;
 }
 
-Error FBXDocument::_parse_asset_header(Ref<FBXState> p_state) {
-	if (!p_state->json.has("asset")) {
-		return ERR_PARSE_ERROR;
-	}
-	Dictionary asset = p_state->json["asset"];
-	if (!asset.has("version")) {
-		return ERR_PARSE_ERROR;
-	}
-	String version = asset["version"];
-	p_state->major_version = version.get_slice(".", 0).to_int();
-	p_state->minor_version = version.get_slice(".", 1).to_int();
-	if (asset.has("copyright")) {
-		p_state->copyright = asset["copyright"];
-	}
-	return OK;
-}
-
-Error FBXDocument::_parse_gltf_state(Ref<FBXState> p_state, const String &p_search_path) {
+Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_search_path) {
 	Error err;
 
 	/* PARSE EXTENSIONS */
-	err = _parse_gltf_extensions(p_state);
+	err = _parse_fbx_extensions(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
 	/* PARSE SCENE */
@@ -5876,7 +5833,7 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	return OK;
 }
 
-Error FBXDocument::_parse_gltf_extensions(Ref<FBXState> p_state) {
+Error FBXDocument::_parse_fbx_extensions(Ref<FBXState> p_state) {
 	ERR_FAIL_NULL_V(p_state, ERR_PARSE_ERROR);
 	if (p_state->json.has("extensionsUsed")) {
 		Vector<String> ext_array = p_state->json["extensionsUsed"];
