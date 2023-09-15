@@ -56,7 +56,6 @@
 #include "scene/resources/surface_tool.h"
 
 #include "modules/modules_enabled.gen.h" // For csg, gridmap.
-#include <_types/_uint64_t.h>
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_file_system.h"
