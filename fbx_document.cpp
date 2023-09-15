@@ -124,6 +124,113 @@ static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 	return importer_mesh;
 }
 
+static String _as_string(const ufbx_string &p_string) {
+	return String(p_string.data);
+}
+
+static Vector2 _as_vec2(const ufbx_vec2 &p_vector) {
+	return Vector2(real_t(p_vector.x), real_t(p_vector.y));
+}
+
+static Vector3 _as_vec3(const ufbx_vec3 &p_vector) {
+	return Vector3(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z));
+}
+
+static Vector4 _as_vec4(const ufbx_vec4 &p_vector) {
+	return Vector4(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z), real_t(p_vector.w));
+}
+
+static Transform3D _as_xform(const ufbx_matrix &p_mat) {
+	Transform3D xform;
+	xform.basis.set_column(Vector3::AXIS_X, _as_vec3(p_mat.cols[0]));
+	xform.basis.set_column(Vector3::AXIS_Y, _as_vec3(p_mat.cols[1]));
+	xform.basis.set_column(Vector3::AXIS_Z, _as_vec3(p_mat.cols[2]));
+	xform.set_origin(_as_vec3(p_mat.cols[3]));
+	return xform;
+}
+
+static Color _as_color(const ufbx_vec4 &p_vector) {
+	return Color(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z), real_t(p_vector.w));
+}
+
+static Quaternion _as_quaternion(const ufbx_quat &p_quat) {
+	return Quaternion(real_t(p_quat.x), real_t(p_quat.y), real_t(p_quat.z), real_t(p_quat.w));
+}
+
+static Color _material_color(const ufbx_material_map &p_map) {
+	if (p_map.value_components == 1) {
+		float r = float(p_map.value_real);
+		return Color(r, r, r);
+	} else if (p_map.value_components == 3) {
+		float r = float(p_map.value_vec3.x);
+		float g = float(p_map.value_vec3.y);
+		float b = float(p_map.value_vec3.z);
+		return Color(r, g, b);
+	} else {
+		float r = float(p_map.value_vec4.x);
+		float g = float(p_map.value_vec4.y);
+		float b = float(p_map.value_vec4.z);
+		float a = float(p_map.value_vec4.z);
+		return Color(r, g, b, a);
+	}
+}
+
+static Color _material_color(const ufbx_material_map &p_map, const ufbx_material_map &p_factor) {
+	Color color = _material_color(p_map);
+	if (p_factor.has_value) {
+		float factor = float(p_factor.value_real);
+		color.r *= factor;
+		color.g *= factor;
+		color.b *= factor;
+	}
+	return color;
+}
+
+static const ufbx_texture *_get_file_texture(const ufbx_texture *p_texture) {
+	if (!p_texture) {
+		return nullptr;
+	}
+	for (const ufbx_texture *texture : p_texture->file_textures) {
+		if (texture->file_index != UFBX_NO_INDEX) {
+			return texture;
+		}
+	}
+	return nullptr;
+}
+
+static Vector<Vector2> _decode_vertex_attrib_vec2(const ufbx_vertex_vec2 &p_attrib, const Vector<uint32_t> &p_indices) {
+	Vector<Vector2> ret;
+
+	int num_indices = p_indices.size();
+	ret.resize(num_indices);
+	for (int i = 0; i < num_indices; i++) {
+		ret.write[i] = _as_vec2(p_attrib[p_indices[i]]);
+	}
+	return ret;
+}
+
+static Vector<Vector3> _decode_vertex_attrib_vec3(const ufbx_vertex_vec3 &p_attrib, const Vector<uint32_t> &p_indices) {
+	Vector<Vector3> ret;
+
+	int num_indices = p_indices.size();
+	ret.resize(num_indices);
+	for (int i = 0; i < num_indices; i++) {
+		ret.write[i] = _as_vec3(p_attrib[p_indices[i]]);
+	}
+	return ret;
+}
+
+static Vector<Color> _decode_vertex_attrib_color(const ufbx_vertex_vec4 &p_attrib, const Vector<uint32_t> &p_indices) {
+	Vector<Color> ret;
+
+	int num_indices = p_indices.size();
+	ret.resize(num_indices);
+	for (int i = 0; i < num_indices; i++) {
+		ret.write[i] = _as_color(p_attrib[p_indices[i]]);
+	}
+	return ret;
+}
+
 Error FBXDocument::_parse_json(const String &p_path, Ref<FBXState> p_state) {
 	Error err;
 	Ref<FileAccess> file = FileAccess::open(p_path, FileAccess::READ, &err);
@@ -305,76 +412,48 @@ String FBXDocument::_gen_unique_bone_name(Ref<FBXState> p_state, const FBXSkelet
 
 Error FBXDocument::_parse_scenes(Ref<FBXState> p_state) {
 	p_state->unique_names.insert("Skeleton3D"); // Reserve skeleton name.
-	ERR_FAIL_COND_V(!p_state->json.has("scenes"), ERR_FILE_CORRUPT);
-	const Array &scenes = p_state->json["scenes"];
-	int loaded_scene = 0;
-	if (p_state->json.has("scene")) {
-		loaded_scene = p_state->json["scene"];
-	} else {
-		WARN_PRINT("The load-time scene is not defined in the glTF2 file. Picking the first scene.");
-	}
 
-	if (scenes.size()) {
-		ERR_FAIL_COND_V(loaded_scene >= scenes.size(), ERR_FILE_CORRUPT);
-		const Dictionary &s = scenes[loaded_scene];
-		ERR_FAIL_COND_V(!s.has("nodes"), ERR_UNAVAILABLE);
-		const Array &nodes = s["nodes"];
-		for (int j = 0; j < nodes.size(); j++) {
-			p_state->root_nodes.push_back(nodes[j]);
-		}
+	const ufbx_scene *fbx_scene = p_state->scene.get();
 
-		if (s.has("name") && !String(s["name"]).is_empty() && !((String)s["name"]).begins_with("Scene")) {
-			p_state->scene_name = _gen_unique_name(p_state, s["name"]);
-		} else {
-			p_state->scene_name = _gen_unique_name(p_state, p_state->filename);
-		}
-	}
+	// TODO: Multi-document support, would need test files for structure
+	p_state->scene_name = "";
+	p_state->root_nodes.push_back(int(fbx_scene->root_node->typed_id));
 
 	return OK;
 }
 
 Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
-	ERR_FAIL_COND_V(!p_state->json.has("nodes"), ERR_FILE_CORRUPT);
-	const Array &nodes = p_state->json["nodes"];
-	for (int i = 0; i < nodes.size(); i++) {
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+
+	for (int i = 0; i < fbx_scene->nodes.count; i++) {
+		const ufbx_node *fbx_node = fbx_scene->nodes[i];
+
 		Ref<FBXNode> node;
 		node.instantiate();
-		const Dictionary &n = nodes[i];
 
-		if (n.has("name")) {
-			node->set_name(n["name"]);
+		node->height = int(fbx_node->node_depth);
+
+		if (fbx_node->name.length > 0) {
+			node->set_name(_as_string(fbx_node->name));
 		}
-		if (n.has("camera")) {
-			node->camera = n["camera"];
+		if (fbx_node->camera) {
+			node->camera = fbx_node->camera->typed_id;
 		}
-		if (n.has("mesh")) {
-			node->mesh = n["mesh"];
+		if (fbx_node->mesh) {
+			node->mesh = fbx_node->mesh->typed_id;
 		}
-		if (n.has("skin")) {
-			node->skin = n["skin"];
-		}
-		if (n.has("matrix")) {
-			node->xform = _arr_to_xform(n["matrix"]);
-		} else {
-			if (n.has("translation")) {
-				node->position = _arr_to_vec3(n["translation"]);
-			}
-			if (n.has("rotation")) {
-				node->rotation = _arr_to_quaternion(n["rotation"]);
-			}
-			if (n.has("scale")) {
-				node->scale = _arr_to_vec3(n["scale"]);
-			}
+
+		{
+			node->position = _as_vec3(fbx_node->local_transform.translation);
+			node->rotation = _as_quaternion(fbx_node->local_transform.rotation);
+			node->scale = _as_vec3(fbx_node->local_transform.scale);
 
 			node->xform.basis.set_quaternion_scale(node->rotation, node->scale);
 			node->xform.origin = node->position;
 		}
 
-		if (n.has("children")) {
-			const Array &children = n["children"];
-			for (int j = 0; j < children.size(); j++) {
-				node->children.push_back(children[j]);
-			}
+		for (const ufbx_node *child : fbx_node->children) {
+			node->children.push_back(child->typed_id);
 		}
 
 		p_state->nodes.push_back(node);
@@ -392,30 +471,7 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 		}
 	}
 
-	_compute_node_heights(p_state);
-
 	return OK;
-}
-
-void FBXDocument::_compute_node_heights(Ref<FBXState> p_state) {
-	p_state->root_nodes.clear();
-	for (FBXNodeIndex node_i = 0; node_i < p_state->nodes.size(); ++node_i) {
-		Ref<FBXNode> node = p_state->nodes[node_i];
-		node->height = 0;
-
-		FBXNodeIndex current_i = node_i;
-		while (current_i >= 0) {
-			const FBXNodeIndex parent_i = p_state->nodes[current_i]->parent;
-			if (parent_i >= 0) {
-				++node->height;
-			}
-			current_i = parent_i;
-		}
-
-		if (node->height == 0) {
-			p_state->root_nodes.push_back(node_i);
-		}
-	}
 }
 
 static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
@@ -435,118 +491,6 @@ static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
 	buf.resize(len);
 
 	return buf;
-}
-
-Error FBXDocument::_parse_buffers(Ref<FBXState> p_state, const String &p_base_path) {
-	if (!p_state->json.has("buffers")) {
-		return OK;
-	}
-
-	const Array &buffers = p_state->json["buffers"];
-	for (FBXBufferIndex i = 0; i < buffers.size(); i++) {
-		if (i == 0 && p_state->glb_data.size()) {
-			p_state->buffers.push_back(p_state->glb_data);
-
-		} else {
-			const Dictionary &buffer = buffers[i];
-			if (buffer.has("uri")) {
-				Vector<uint8_t> buffer_data;
-				String uri = buffer["uri"];
-
-				if (uri.begins_with("data:")) { // Embedded data using base64.
-					// Validate data MIME types and throw an error if it's one we don't know/support.
-					if (!uri.begins_with("data:application/octet-stream;base64") &&
-							!uri.begins_with("data:application/gltf-buffer;base64")) {
-						ERR_PRINT("glTF: Got buffer with an unknown URI data type: " + uri);
-					}
-					buffer_data = _parse_base64_uri(uri);
-				} else { // Relative path to an external image file.
-					ERR_FAIL_COND_V(p_base_path.is_empty(), ERR_INVALID_PARAMETER);
-					uri = uri.uri_decode();
-					uri = p_base_path.path_join(uri).replace("\\", "/"); // Fix for Windows.
-					buffer_data = FileAccess::get_file_as_bytes(uri);
-					ERR_FAIL_COND_V_MSG(buffer.size() == 0, ERR_PARSE_ERROR, "glTF: Couldn't load binary file as an array: " + uri);
-				}
-
-				ERR_FAIL_COND_V(!buffer.has("byteLength"), ERR_PARSE_ERROR);
-				int byteLength = buffer["byteLength"];
-				ERR_FAIL_COND_V(byteLength < buffer_data.size(), ERR_PARSE_ERROR);
-				p_state->buffers.push_back(buffer_data);
-			}
-		}
-	}
-
-	print_verbose("glTF: Total buffers: " + itos(p_state->buffers.size()));
-
-	return OK;
-}
-
-Error FBXDocument::_encode_buffer_views(Ref<FBXState> p_state) {
-	Array buffers;
-	for (FBXBufferViewIndex i = 0; i < p_state->buffer_views.size(); i++) {
-		Dictionary d;
-
-		Ref<FBXBufferView> buffer_view = p_state->buffer_views[i];
-
-		d["buffer"] = buffer_view->buffer;
-		d["byteLength"] = buffer_view->byte_length;
-
-		d["byteOffset"] = buffer_view->byte_offset;
-
-		if (buffer_view->byte_stride != -1) {
-			d["byteStride"] = buffer_view->byte_stride;
-		}
-
-		// TODO Sparse
-		// d["target"] = buffer_view->indices;
-
-		ERR_FAIL_COND_V(!d.has("buffer"), ERR_INVALID_DATA);
-		ERR_FAIL_COND_V(!d.has("byteLength"), ERR_INVALID_DATA);
-		buffers.push_back(d);
-	}
-	print_verbose("glTF: Total buffer views: " + itos(p_state->buffer_views.size()));
-	if (!buffers.size()) {
-		return OK;
-	}
-	p_state->json["bufferViews"] = buffers;
-	return OK;
-}
-
-Error FBXDocument::_parse_buffer_views(Ref<FBXState> p_state) {
-	if (!p_state->json.has("bufferViews")) {
-		return OK;
-	}
-	const Array &buffers = p_state->json["bufferViews"];
-	for (FBXBufferViewIndex i = 0; i < buffers.size(); i++) {
-		const Dictionary &d = buffers[i];
-
-		Ref<FBXBufferView> buffer_view;
-		buffer_view.instantiate();
-
-		ERR_FAIL_COND_V(!d.has("buffer"), ERR_PARSE_ERROR);
-		buffer_view->buffer = d["buffer"];
-		ERR_FAIL_COND_V(!d.has("byteLength"), ERR_PARSE_ERROR);
-		buffer_view->byte_length = d["byteLength"];
-
-		if (d.has("byteOffset")) {
-			buffer_view->byte_offset = d["byteOffset"];
-		}
-
-		if (d.has("byteStride")) {
-			buffer_view->byte_stride = d["byteStride"];
-		}
-
-		if (d.has("target")) {
-			const int target = d["target"];
-			buffer_view->indices = target == FBXDocument::ELEMENT_ARRAY_BUFFER;
-		}
-
-		p_state->buffer_views.push_back(buffer_view);
-	}
-
-	print_verbose("glTF: Total buffer views: " + itos(p_state->buffer_views.size()));
-
-	return OK;
 }
 
 Error FBXDocument::_encode_accessors(Ref<FBXState> p_state) {
@@ -659,81 +603,6 @@ FBXType FBXDocument::_get_type_from_str(const String &p_string) {
 	}
 
 	ERR_FAIL_V(FBXType::TYPE_SCALAR);
-}
-
-Error FBXDocument::_parse_accessors(Ref<FBXState> p_state) {
-	if (!p_state->json.has("accessors")) {
-		return OK;
-	}
-	const Array &accessors = p_state->json["accessors"];
-	for (FBXAccessorIndex i = 0; i < accessors.size(); i++) {
-		const Dictionary &d = accessors[i];
-
-		Ref<FBXAccessor> accessor;
-		accessor.instantiate();
-
-		ERR_FAIL_COND_V(!d.has("componentType"), ERR_PARSE_ERROR);
-		accessor->component_type = d["componentType"];
-		ERR_FAIL_COND_V(!d.has("count"), ERR_PARSE_ERROR);
-		accessor->count = d["count"];
-		ERR_FAIL_COND_V(!d.has("type"), ERR_PARSE_ERROR);
-		accessor->type = _get_type_from_str(d["type"]);
-
-		if (d.has("bufferView")) {
-			accessor->buffer_view = d["bufferView"]; //optional because it may be sparse...
-		}
-
-		if (d.has("byteOffset")) {
-			accessor->byte_offset = d["byteOffset"];
-		}
-
-		if (d.has("normalized")) {
-			accessor->normalized = d["normalized"];
-		}
-
-		if (d.has("max")) {
-			accessor->max = d["max"];
-		}
-
-		if (d.has("min")) {
-			accessor->min = d["min"];
-		}
-
-		if (d.has("sparse")) {
-			//eeh..
-
-			const Dictionary &s = d["sparse"];
-
-			ERR_FAIL_COND_V(!s.has("count"), ERR_PARSE_ERROR);
-			accessor->sparse_count = s["count"];
-			ERR_FAIL_COND_V(!s.has("indices"), ERR_PARSE_ERROR);
-			const Dictionary &si = s["indices"];
-
-			ERR_FAIL_COND_V(!si.has("bufferView"), ERR_PARSE_ERROR);
-			accessor->sparse_indices_buffer_view = si["bufferView"];
-			ERR_FAIL_COND_V(!si.has("componentType"), ERR_PARSE_ERROR);
-			accessor->sparse_indices_component_type = si["componentType"];
-
-			if (si.has("byteOffset")) {
-				accessor->sparse_indices_byte_offset = si["byteOffset"];
-			}
-
-			ERR_FAIL_COND_V(!s.has("values"), ERR_PARSE_ERROR);
-			const Dictionary &sv = s["values"];
-
-			ERR_FAIL_COND_V(!sv.has("bufferView"), ERR_PARSE_ERROR);
-			accessor->sparse_values_buffer_view = sv["bufferView"];
-			if (sv.has("byteOffset")) {
-				accessor->sparse_values_byte_offset = sv["byteOffset"];
-			}
-		}
-
-		p_state->accessors.push_back(accessor);
-	}
-
-	print_verbose("glTF: Total accessors: " + itos(p_state->accessors.size()));
-
-	return OK;
 }
 
 double FBXDocument::_filter_number(double p_float) {
@@ -973,93 +842,6 @@ Error FBXDocument::_encode_buffer_view(Ref<FBXState> p_state, const double *p_sr
 	return OK;
 }
 
-Error FBXDocument::_decode_buffer_view(Ref<FBXState> p_state, double *p_dst, const FBXBufferViewIndex p_buffer_view, const int p_skip_every, const int p_skip_bytes, const int p_element_size, const int p_count, const FBXType p_type, const int p_component_count, const int p_component_type, const int p_component_size, const bool p_normalized, const int p_byte_offset, const bool p_for_vertex) {
-	const Ref<FBXBufferView> bv = p_state->buffer_views[p_buffer_view];
-
-	int stride = p_element_size;
-	if (bv->byte_stride != -1) {
-		stride = bv->byte_stride;
-	}
-	if (p_for_vertex && stride % 4) {
-		stride += 4 - (stride % 4); //according to spec must be multiple of 4
-	}
-
-	ERR_FAIL_INDEX_V(bv->buffer, p_state->buffers.size(), ERR_PARSE_ERROR);
-
-	const uint32_t offset = bv->byte_offset + p_byte_offset;
-	Vector<uint8_t> buffer = p_state->buffers[bv->buffer]; //copy on write, so no performance hit
-	const uint8_t *bufptr = buffer.ptr();
-
-	//use to debug
-	print_verbose("glTF: type " + _get_type_name(p_type) + " component type: " + _get_component_type_name(p_component_type) + " stride: " + itos(stride) + " amount " + itos(p_count));
-	print_verbose("glTF: accessor offset " + itos(p_byte_offset) + " view offset: " + itos(bv->byte_offset) + " total buffer len: " + itos(buffer.size()) + " view len " + itos(bv->byte_length));
-
-	const int buffer_end = (stride * (p_count - 1)) + p_element_size;
-	ERR_FAIL_COND_V(buffer_end > bv->byte_length, ERR_PARSE_ERROR);
-
-	ERR_FAIL_COND_V((int)(offset + buffer_end) > buffer.size(), ERR_PARSE_ERROR);
-
-	//fill everything as doubles
-
-	for (int i = 0; i < p_count; i++) {
-		const uint8_t *src = &bufptr[offset + i * stride];
-
-		for (int j = 0; j < p_component_count; j++) {
-			if (p_skip_every && j > 0 && (j % p_skip_every) == 0) {
-				src += p_skip_bytes;
-			}
-
-			double d = 0;
-
-			switch (p_component_type) {
-				case COMPONENT_TYPE_BYTE: {
-					int8_t b = int8_t(*src);
-					if (p_normalized) {
-						d = (double(b) / 128.0);
-					} else {
-						d = double(b);
-					}
-				} break;
-				case COMPONENT_TYPE_UNSIGNED_BYTE: {
-					uint8_t b = *src;
-					if (p_normalized) {
-						d = (double(b) / 255.0);
-					} else {
-						d = double(b);
-					}
-				} break;
-				case COMPONENT_TYPE_SHORT: {
-					int16_t s = *(int16_t *)src;
-					if (p_normalized) {
-						d = (double(s) / 32768.0);
-					} else {
-						d = double(s);
-					}
-				} break;
-				case COMPONENT_TYPE_UNSIGNED_SHORT: {
-					uint16_t s = *(uint16_t *)src;
-					if (p_normalized) {
-						d = (double(s) / 65535.0);
-					} else {
-						d = double(s);
-					}
-				} break;
-				case COMPONENT_TYPE_INT: {
-					d = *(int *)src;
-				} break;
-				case COMPONENT_TYPE_FLOAT: {
-					d = *(float *)src;
-				} break;
-			}
-
-			*p_dst++ = d;
-			src += p_component_size;
-		}
-	}
-
-	return OK;
-}
-
 int FBXDocument::_get_component_type_size(const int p_component_type) {
 	switch (p_component_type) {
 		case COMPONENT_TYPE_BYTE:
@@ -1082,97 +864,7 @@ int FBXDocument::_get_component_type_size(const int p_component_type) {
 }
 
 Vector<double> FBXDocument::_decode_accessor(Ref<FBXState> p_state, const FBXAccessorIndex p_accessor, const bool p_for_vertex) {
-	//spec, for reference:
-	//https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#data-alignment
-
-	ERR_FAIL_INDEX_V(p_accessor, p_state->accessors.size(), Vector<double>());
-
-	const Ref<FBXAccessor> a = p_state->accessors[p_accessor];
-
-	const int component_count_for_type[7] = {
-		1, 2, 3, 4, 4, 9, 16
-	};
-
-	const int component_count = component_count_for_type[a->type];
-	const int component_size = _get_component_type_size(a->component_type);
-	ERR_FAIL_COND_V(component_size == 0, Vector<double>());
-	int element_size = component_count * component_size;
-
-	int skip_every = 0;
-	int skip_bytes = 0;
-	//special case of alignments, as described in spec
-	switch (a->component_type) {
-		case COMPONENT_TYPE_BYTE:
-		case COMPONENT_TYPE_UNSIGNED_BYTE: {
-			if (a->type == TYPE_MAT2) {
-				skip_every = 2;
-				skip_bytes = 2;
-				element_size = 8; //override for this case
-			}
-			if (a->type == TYPE_MAT3) {
-				skip_every = 3;
-				skip_bytes = 1;
-				element_size = 12; //override for this case
-			}
-		} break;
-		case COMPONENT_TYPE_SHORT:
-		case COMPONENT_TYPE_UNSIGNED_SHORT: {
-			if (a->type == TYPE_MAT3) {
-				skip_every = 6;
-				skip_bytes = 4;
-				element_size = 16; //override for this case
-			}
-		} break;
-		default: {
-		}
-	}
-
-	Vector<double> dst_buffer;
-	dst_buffer.resize(component_count * a->count);
-	double *dst = dst_buffer.ptrw();
-
-	if (a->buffer_view >= 0) {
-		ERR_FAIL_INDEX_V(a->buffer_view, p_state->buffer_views.size(), Vector<double>());
-
-		const Error err = _decode_buffer_view(p_state, dst, a->buffer_view, skip_every, skip_bytes, element_size, a->count, a->type, component_count, a->component_type, component_size, a->normalized, a->byte_offset, p_for_vertex);
-		if (err != OK) {
-			return Vector<double>();
-		}
-	} else {
-		//fill with zeros, as bufferview is not defined.
-		for (int i = 0; i < (a->count * component_count); i++) {
-			dst_buffer.write[i] = 0;
-		}
-	}
-
-	if (a->sparse_count > 0) {
-		// I could not find any file using this, so this code is so far untested
-		Vector<double> indices;
-		indices.resize(a->sparse_count);
-		const int indices_component_size = _get_component_type_size(a->sparse_indices_component_type);
-
-		Error err = _decode_buffer_view(p_state, indices.ptrw(), a->sparse_indices_buffer_view, 0, 0, indices_component_size, a->sparse_count, TYPE_SCALAR, 1, a->sparse_indices_component_type, indices_component_size, false, a->sparse_indices_byte_offset, false);
-		if (err != OK) {
-			return Vector<double>();
-		}
-
-		Vector<double> data;
-		data.resize(component_count * a->sparse_count);
-		err = _decode_buffer_view(p_state, data.ptrw(), a->sparse_values_buffer_view, skip_every, skip_bytes, element_size, a->sparse_count, a->type, component_count, a->component_type, component_size, a->normalized, a->sparse_values_byte_offset, p_for_vertex);
-		if (err != OK) {
-			return Vector<double>();
-		}
-
-		for (int i = 0; i < indices.size(); i++) {
-			const int write_offset = int(indices[i]) * component_count;
-
-			for (int j = 0; j < component_count; j++) {
-				dst[write_offset + j] = data[i * component_count + j];
-			}
-		}
-	}
-
-	return dst_buffer;
+	ERR_FAIL_V(Vector<double>());
 }
 
 FBXAccessorIndex FBXDocument::_encode_accessor_as_ints(Ref<FBXState> p_state, const Vector<int32_t> p_attribs, const bool p_for_vertex) {
@@ -1821,492 +1513,354 @@ Vector<Transform3D> FBXDocument::_decode_accessor_as_xform(Ref<FBXState> p_state
 }
 
 Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
-	if (!p_state->json.has("meshes")) {
-		return OK;
-	}
+	ufbx_scene *fbx_scene = p_state->scene.get();
 
-	Array meshes = p_state->json["meshes"];
-	for (FBXMeshIndex i = 0; i < meshes.size(); i++) {
-		print_verbose("glTF: Parsing mesh: " + itos(i));
-		Dictionary d = meshes[i];
+	for (const ufbx_mesh *fbx_mesh : fbx_scene->meshes) {
+		print_verbose("FBX: Parsing mesh: " + itos(int64_t(fbx_mesh->typed_id)));
 
-		Ref<FBXMesh> mesh;
-		mesh.instantiate();
-		bool has_vertex_color = false;
+		static const Mesh::PrimitiveType primitive_types[] = {
+			Mesh::PRIMITIVE_TRIANGLES,
+			Mesh::PRIMITIVE_POINTS,
+			Mesh::PRIMITIVE_LINES,
+		};
 
-		ERR_FAIL_COND_V(!d.has("primitives"), ERR_PARSE_ERROR);
-
-		Array primitives = d["primitives"];
-		const Dictionary &extras = d.has("extras") ? (Dictionary)d["extras"] : Dictionary();
 		Ref<ImporterMesh> import_mesh;
 		import_mesh.instantiate();
 		String mesh_name = "mesh";
-		if (d.has("name") && !String(d["name"]).is_empty()) {
-			mesh_name = d["name"];
+		if (fbx_mesh->name.length > 0) {
+			mesh_name = _as_string(fbx_mesh->name);
 		}
-		import_mesh->set_name(_gen_unique_name(p_state, vformat("%s_%s", p_state->scene_name, mesh_name)));
-
-		for (int j = 0; j < primitives.size(); j++) {
-			uint32_t flags = 0;
-			Dictionary p = primitives[j];
-
-			Array array;
-			array.resize(Mesh::ARRAY_MAX);
-
-			ERR_FAIL_COND_V(!p.has("attributes"), ERR_PARSE_ERROR);
-
-			Dictionary a = p["attributes"];
-
-			Mesh::PrimitiveType primitive = Mesh::PRIMITIVE_TRIANGLES;
-			if (p.has("mode")) {
-				const int mode = p["mode"];
-				ERR_FAIL_INDEX_V(mode, 7, ERR_FILE_CORRUPT);
-				// Convert mesh.primitive.mode to Godot Mesh enum. See:
-				// https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#_mesh_primitive_mode
-				static const Mesh::PrimitiveType primitives2[7] = {
-					Mesh::PRIMITIVE_POINTS, // 0 POINTS
-					Mesh::PRIMITIVE_LINES, // 1 LINES
-					Mesh::PRIMITIVE_LINES, // 2 LINE_LOOP; loop not supported, should be converted
-					Mesh::PRIMITIVE_LINE_STRIP, // 3 LINE_STRIP
-					Mesh::PRIMITIVE_TRIANGLES, // 4 TRIANGLES
-					Mesh::PRIMITIVE_TRIANGLE_STRIP, // 5 TRIANGLE_STRIP
-					Mesh::PRIMITIVE_TRIANGLES, // 6 TRIANGLE_FAN fan not supported, should be converted
-					// TODO: Line loop and triangle fan are not supported and need to be converted to lines and triangles.
-				};
-
-				primitive = primitives2[mode];
-			}
-
-			ERR_FAIL_COND_V(!a.has("POSITION"), ERR_PARSE_ERROR);
-			int32_t vertex_num = 0;
-			if (a.has("POSITION")) {
-				PackedVector3Array vertices = _decode_accessor_as_vec3(p_state, a["POSITION"], true);
-				array[Mesh::ARRAY_VERTEX] = vertices;
-				vertex_num = vertices.size();
-			}
-			if (a.has("NORMAL")) {
-				array[Mesh::ARRAY_NORMAL] = _decode_accessor_as_vec3(p_state, a["NORMAL"], true);
-			}
-			if (a.has("TANGENT")) {
-				array[Mesh::ARRAY_TANGENT] = _decode_accessor_as_floats(p_state, a["TANGENT"], true);
-			}
-			if (a.has("TEXCOORD_0")) {
-				array[Mesh::ARRAY_TEX_UV] = _decode_accessor_as_vec2(p_state, a["TEXCOORD_0"], true);
-			}
-			if (a.has("TEXCOORD_1")) {
-				array[Mesh::ARRAY_TEX_UV2] = _decode_accessor_as_vec2(p_state, a["TEXCOORD_1"], true);
-			}
-			for (int custom_i = 0; custom_i < 3; custom_i++) {
-				Vector<float> cur_custom;
-				Vector<Vector2> texcoord_first;
-				Vector<Vector2> texcoord_second;
-
-				int texcoord_i = 2 + 2 * custom_i;
-				String gltf_texcoord_key = vformat("TEXCOORD_%d", texcoord_i);
-				int num_channels = 0;
-				if (a.has(gltf_texcoord_key)) {
-					texcoord_first = _decode_accessor_as_vec2(p_state, a[gltf_texcoord_key], true);
-					num_channels = 2;
-				}
-				gltf_texcoord_key = vformat("TEXCOORD_%d", texcoord_i + 1);
-				if (a.has(gltf_texcoord_key)) {
-					texcoord_second = _decode_accessor_as_vec2(p_state, a[gltf_texcoord_key], true);
-					num_channels = 4;
-				}
-				if (!num_channels) {
-					break;
-				}
-				if (num_channels == 2 || num_channels == 4) {
-					cur_custom.resize(vertex_num * num_channels);
-					for (int32_t uv_i = 0; uv_i < texcoord_first.size() && uv_i < vertex_num; uv_i++) {
-						cur_custom.write[uv_i * num_channels + 0] = texcoord_first[uv_i].x;
-						cur_custom.write[uv_i * num_channels + 1] = texcoord_first[uv_i].y;
-					}
-					// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
-					for (int32_t uv_i = texcoord_first.size(); uv_i < vertex_num; uv_i++) {
-						cur_custom.write[uv_i * num_channels + 0] = 0;
-						cur_custom.write[uv_i * num_channels + 1] = 0;
-					}
-				}
-				if (num_channels == 4) {
-					for (int32_t uv_i = 0; uv_i < texcoord_second.size() && uv_i < vertex_num; uv_i++) {
-						// num_channels must be 4
-						cur_custom.write[uv_i * num_channels + 2] = texcoord_second[uv_i].x;
-						cur_custom.write[uv_i * num_channels + 3] = texcoord_second[uv_i].y;
-					}
-					// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
-					for (int32_t uv_i = texcoord_second.size(); uv_i < vertex_num; uv_i++) {
-						cur_custom.write[uv_i * num_channels + 2] = 0;
-						cur_custom.write[uv_i * num_channels + 3] = 0;
-					}
-				}
-				if (cur_custom.size() > 0) {
-					array[Mesh::ARRAY_CUSTOM0 + custom_i] = cur_custom;
-					int custom_shift = Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT + custom_i * Mesh::ARRAY_FORMAT_CUSTOM_BITS;
-					if (num_channels == 2) {
-						flags |= Mesh::ARRAY_CUSTOM_RG_FLOAT << custom_shift;
-					} else {
-						flags |= Mesh::ARRAY_CUSTOM_RGBA_FLOAT << custom_shift;
-					}
-				}
-			}
-			if (a.has("COLOR_0")) {
-				array[Mesh::ARRAY_COLOR] = _decode_accessor_as_color(p_state, a["COLOR_0"], true);
-				has_vertex_color = true;
-			}
-			if (a.has("JOINTS_0") && !a.has("JOINTS_1")) {
-				array[Mesh::ARRAY_BONES] = _decode_accessor_as_ints(p_state, a["JOINTS_0"], true);
-			} else if (a.has("JOINTS_0") && a.has("JOINTS_1")) {
-				PackedInt32Array joints_0 = _decode_accessor_as_ints(p_state, a["JOINTS_0"], true);
-				PackedInt32Array joints_1 = _decode_accessor_as_ints(p_state, a["JOINTS_1"], true);
-				ERR_FAIL_COND_V(joints_0.size() != joints_1.size(), ERR_INVALID_DATA);
-				int32_t weight_8_count = JOINT_GROUP_SIZE * 2;
-				Vector<int> joints;
-				joints.resize(vertex_num * weight_8_count);
-				for (int32_t vertex_i = 0; vertex_i < vertex_num; vertex_i++) {
-					joints.write[vertex_i * weight_8_count + 0] = joints_0[vertex_i * JOINT_GROUP_SIZE + 0];
-					joints.write[vertex_i * weight_8_count + 1] = joints_0[vertex_i * JOINT_GROUP_SIZE + 1];
-					joints.write[vertex_i * weight_8_count + 2] = joints_0[vertex_i * JOINT_GROUP_SIZE + 2];
-					joints.write[vertex_i * weight_8_count + 3] = joints_0[vertex_i * JOINT_GROUP_SIZE + 3];
-					joints.write[vertex_i * weight_8_count + 4] = joints_1[vertex_i * JOINT_GROUP_SIZE + 0];
-					joints.write[vertex_i * weight_8_count + 5] = joints_1[vertex_i * JOINT_GROUP_SIZE + 1];
-					joints.write[vertex_i * weight_8_count + 6] = joints_1[vertex_i * JOINT_GROUP_SIZE + 2];
-					joints.write[vertex_i * weight_8_count + 7] = joints_1[vertex_i * JOINT_GROUP_SIZE + 3];
-				}
-				array[Mesh::ARRAY_BONES] = joints;
-			}
-			if (a.has("WEIGHTS_0") && !a.has("WEIGHTS_1")) {
-				Vector<float> weights = _decode_accessor_as_floats(p_state, a["WEIGHTS_0"], true);
-				{ //gltf does not seem to normalize the weights for some reason..
-					int wc = weights.size();
-					float *w = weights.ptrw();
-
-					for (int k = 0; k < wc; k += 4) {
-						float total = 0.0;
-						total += w[k + 0];
-						total += w[k + 1];
-						total += w[k + 2];
-						total += w[k + 3];
-						if (total > 0.0) {
-							w[k + 0] /= total;
-							w[k + 1] /= total;
-							w[k + 2] /= total;
-							w[k + 3] /= total;
-						}
-					}
-				}
-				array[Mesh::ARRAY_WEIGHTS] = weights;
-			} else if (a.has("WEIGHTS_0") && a.has("WEIGHTS_1")) {
-				Vector<float> weights_0 = _decode_accessor_as_floats(p_state, a["WEIGHTS_0"], true);
-				Vector<float> weights_1 = _decode_accessor_as_floats(p_state, a["WEIGHTS_1"], true);
-				Vector<float> weights;
-				ERR_FAIL_COND_V(weights_0.size() != weights_1.size(), ERR_INVALID_DATA);
-				int32_t weight_8_count = JOINT_GROUP_SIZE * 2;
-				weights.resize(vertex_num * weight_8_count);
-				for (int32_t vertex_i = 0; vertex_i < vertex_num; vertex_i++) {
-					weights.write[vertex_i * weight_8_count + 0] = weights_0[vertex_i * JOINT_GROUP_SIZE + 0];
-					weights.write[vertex_i * weight_8_count + 1] = weights_0[vertex_i * JOINT_GROUP_SIZE + 1];
-					weights.write[vertex_i * weight_8_count + 2] = weights_0[vertex_i * JOINT_GROUP_SIZE + 2];
-					weights.write[vertex_i * weight_8_count + 3] = weights_0[vertex_i * JOINT_GROUP_SIZE + 3];
-					weights.write[vertex_i * weight_8_count + 4] = weights_1[vertex_i * JOINT_GROUP_SIZE + 0];
-					weights.write[vertex_i * weight_8_count + 5] = weights_1[vertex_i * JOINT_GROUP_SIZE + 1];
-					weights.write[vertex_i * weight_8_count + 6] = weights_1[vertex_i * JOINT_GROUP_SIZE + 2];
-					weights.write[vertex_i * weight_8_count + 7] = weights_1[vertex_i * JOINT_GROUP_SIZE + 3];
-				}
-				{ //gltf does not seem to normalize the weights for some reason..
-					int wc = weights.size();
-					float *w = weights.ptrw();
-
-					for (int k = 0; k < wc; k += weight_8_count) {
-						float total = 0.0;
-						total += w[k + 0];
-						total += w[k + 1];
-						total += w[k + 2];
-						total += w[k + 3];
-						total += w[k + 4];
-						total += w[k + 5];
-						total += w[k + 6];
-						total += w[k + 7];
-						if (total > 0.0) {
-							w[k + 0] /= total;
-							w[k + 1] /= total;
-							w[k + 2] /= total;
-							w[k + 3] /= total;
-							w[k + 4] /= total;
-							w[k + 5] /= total;
-							w[k + 6] /= total;
-							w[k + 7] /= total;
-						}
-					}
-				}
-				array[Mesh::ARRAY_WEIGHTS] = weights;
-			}
-
-			if (p.has("indices")) {
-				Vector<int> indices = _decode_accessor_as_ints(p_state, p["indices"], false);
-
-				if (primitive == Mesh::PRIMITIVE_TRIANGLES) {
-					//swap around indices, convert ccw to cw for front face
-
-					const int is = indices.size();
-					int *w = indices.ptrw();
-					for (int k = 0; k < is; k += 3) {
-						SWAP(w[k + 1], w[k + 2]);
-					}
-				}
-				array[Mesh::ARRAY_INDEX] = indices;
-
-			} else if (primitive == Mesh::PRIMITIVE_TRIANGLES) {
-				//generate indices because they need to be swapped for CW/CCW
-				const Vector<Vector3> &vertices = array[Mesh::ARRAY_VERTEX];
-				ERR_FAIL_COND_V(vertices.size() == 0, ERR_PARSE_ERROR);
-				Vector<int> indices;
-				const int vs = vertices.size();
-				indices.resize(vs);
-				{
-					int *w = indices.ptrw();
-					for (int k = 0; k < vs; k += 3) {
-						w[k] = k;
-						w[k + 1] = k + 2;
-						w[k + 2] = k + 1;
-					}
-				}
-				array[Mesh::ARRAY_INDEX] = indices;
-			}
-
-			bool generate_tangents = (primitive == Mesh::PRIMITIVE_TRIANGLES && !a.has("TANGENT") && a.has("TEXCOORD_0") && a.has("NORMAL"));
-
-			Ref<SurfaceTool> mesh_surface_tool;
-			mesh_surface_tool.instantiate();
-			mesh_surface_tool->create_from_triangle_arrays(array);
-			if (a.has("JOINTS_0") && a.has("JOINTS_1")) {
-				mesh_surface_tool->set_skin_weight_count(SurfaceTool::SKIN_8_WEIGHTS);
-			}
-			mesh_surface_tool->index();
-			if (generate_tangents) {
-				//must generate mikktspace tangents.. ergh..
-				mesh_surface_tool->generate_tangents();
-			}
-			array = mesh_surface_tool->commit_to_arrays();
-
-			Array morphs;
-			//blend shapes
-			if (p.has("targets")) {
-				print_verbose("glTF: Mesh has targets");
-				const Array &targets = p["targets"];
-
-				//ideally BLEND_SHAPE_MODE_RELATIVE since gltf2 stores in displacement
-				//but it could require a larger refactor?
-				import_mesh->set_blend_shape_mode(Mesh::BLEND_SHAPE_MODE_NORMALIZED);
-
-				if (j == 0) {
-					const Array &target_names = extras.has("targetNames") ? (Array)extras["targetNames"] : Array();
-					for (int k = 0; k < targets.size(); k++) {
-						String bs_name;
-						if (k < target_names.size() && ((String)target_names[k]).size() != 0) {
-							bs_name = (String)target_names[k];
-						} else {
-							bs_name = String("morph_") + itos(k);
-						}
-						import_mesh->add_blend_shape(bs_name);
-					}
-				}
-
-				for (int k = 0; k < targets.size(); k++) {
-					const Dictionary &t = targets[k];
-
-					Array array_copy;
-					array_copy.resize(Mesh::ARRAY_MAX);
-
-					for (int l = 0; l < Mesh::ARRAY_MAX; l++) {
-						array_copy[l] = array[l];
-					}
-
-					if (t.has("POSITION")) {
-						Vector<Vector3> varr = _decode_accessor_as_vec3(p_state, t["POSITION"], true);
-						const Vector<Vector3> src_varr = array[Mesh::ARRAY_VERTEX];
-						const int size = src_varr.size();
-						ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
-						{
-							const int max_idx = varr.size();
-							varr.resize(size);
-
-							Vector3 *w_varr = varr.ptrw();
-							const Vector3 *r_varr = varr.ptr();
-							const Vector3 *r_src_varr = src_varr.ptr();
-							for (int l = 0; l < size; l++) {
-								if (l < max_idx) {
-									w_varr[l] = r_varr[l] + r_src_varr[l];
-								} else {
-									w_varr[l] = r_src_varr[l];
-								}
-							}
-						}
-						array_copy[Mesh::ARRAY_VERTEX] = varr;
-					}
-					if (t.has("NORMAL")) {
-						Vector<Vector3> narr = _decode_accessor_as_vec3(p_state, t["NORMAL"], true);
-						const Vector<Vector3> src_narr = array[Mesh::ARRAY_NORMAL];
-						int size = src_narr.size();
-						ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
-						{
-							int max_idx = narr.size();
-							narr.resize(size);
-
-							Vector3 *w_narr = narr.ptrw();
-							const Vector3 *r_narr = narr.ptr();
-							const Vector3 *r_src_narr = src_narr.ptr();
-							for (int l = 0; l < size; l++) {
-								if (l < max_idx) {
-									w_narr[l] = r_narr[l] + r_src_narr[l];
-								} else {
-									w_narr[l] = r_src_narr[l];
-								}
-							}
-						}
-						array_copy[Mesh::ARRAY_NORMAL] = narr;
-					}
-					if (t.has("TANGENT")) {
-						const Vector<Vector3> tangents_v3 = _decode_accessor_as_vec3(p_state, t["TANGENT"], true);
-						const Vector<float> src_tangents = array[Mesh::ARRAY_TANGENT];
-						ERR_FAIL_COND_V(src_tangents.size() == 0, ERR_PARSE_ERROR);
-
-						Vector<float> tangents_v4;
-
-						{
-							int max_idx = tangents_v3.size();
-
-							int size4 = src_tangents.size();
-							tangents_v4.resize(size4);
-							float *w4 = tangents_v4.ptrw();
-
-							const Vector3 *r3 = tangents_v3.ptr();
-							const float *r4 = src_tangents.ptr();
-
-							for (int l = 0; l < size4 / 4; l++) {
-								if (l < max_idx) {
-									w4[l * 4 + 0] = r3[l].x + r4[l * 4 + 0];
-									w4[l * 4 + 1] = r3[l].y + r4[l * 4 + 1];
-									w4[l * 4 + 2] = r3[l].z + r4[l * 4 + 2];
-								} else {
-									w4[l * 4 + 0] = r4[l * 4 + 0];
-									w4[l * 4 + 1] = r4[l * 4 + 1];
-									w4[l * 4 + 2] = r4[l * 4 + 2];
-								}
-								w4[l * 4 + 3] = r4[l * 4 + 3]; //copy flip value
-							}
-						}
-
-						array_copy[Mesh::ARRAY_TANGENT] = tangents_v4;
-					}
-
-					Ref<SurfaceTool> blend_surface_tool;
-					blend_surface_tool.instantiate();
-					blend_surface_tool->create_from_triangle_arrays(array_copy);
-					if (a.has("JOINTS_0") && a.has("JOINTS_1")) {
-						blend_surface_tool->set_skin_weight_count(SurfaceTool::SKIN_8_WEIGHTS);
-					}
-					blend_surface_tool->index();
-					if (generate_tangents) {
-						blend_surface_tool->generate_tangents();
-					}
-					array_copy = blend_surface_tool->commit_to_arrays();
-
-					// Enforce blend shape mask array format
-					for (int l = 0; l < Mesh::ARRAY_MAX; l++) {
-						if (!(Mesh::ARRAY_FORMAT_BLEND_SHAPE_MASK & (1 << l))) {
-							array_copy[l] = Variant();
-						}
-					}
-
-					morphs.push_back(array_copy);
-				}
-			}
-
-			Ref<Material> mat;
-			String mat_name;
-			if (!p_state->discard_meshes_and_materials) {
-				if (p.has("material")) {
-					const int material = p["material"];
-					ERR_FAIL_INDEX_V(material, p_state->materials.size(), ERR_FILE_CORRUPT);
-					Ref<Material> mat3d = p_state->materials[material];
-					ERR_FAIL_NULL_V(mat3d, ERR_FILE_CORRUPT);
-
-					Ref<BaseMaterial3D> base_material = mat3d;
-					if (has_vertex_color && base_material.is_valid()) {
-						base_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-					}
-					mat = mat3d;
-
-				} else {
-					Ref<StandardMaterial3D> mat3d;
-					mat3d.instantiate();
-					if (has_vertex_color) {
-						mat3d->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-					}
-					mat = mat3d;
-				}
-				ERR_FAIL_NULL_V(mat, ERR_FILE_CORRUPT);
-				mat_name = mat->get_name();
-			}
-			import_mesh->add_surface(primitive, array, morphs,
-					Dictionary(), mat, mat_name, flags);
-		}
+		import_mesh->set_name(_gen_unique_name(p_state, mesh_name));
 
 		Vector<float> blend_weights;
-		blend_weights.resize(import_mesh->get_blend_shape_count());
-		for (int32_t weight_i = 0; weight_i < blend_weights.size(); weight_i++) {
-			blend_weights.write[weight_i] = 0.0f;
-		}
+		for (const ufbx_mesh_material &fbx_mesh_mat : fbx_mesh->materials) {
+			for (Mesh::PrimitiveType primitive : primitive_types) {
 
-		if (d.has("weights")) {
-			const Array &weights = d["weights"];
-			for (int j = 0; j < weights.size(); j++) {
-				if (j >= blend_weights.size()) {
-					break;
+				uint32_t num_indices = 0;
+				uint32_t min_face_indices = 0;
+				uint32_t max_face_indices = 0;
+				switch (primitive) {
+					case Mesh::PRIMITIVE_POINTS:
+						num_indices = fbx_mesh_mat.num_point_faces * 1;
+						break;
+					case Mesh::PRIMITIVE_LINES:
+						num_indices = fbx_mesh_mat.num_line_faces * 2;
+						break;
+					case Mesh::PRIMITIVE_TRIANGLES:
+						num_indices = fbx_mesh_mat.num_triangles * 3;
+						break;
 				}
-				blend_weights.write[j] = weights[j];
+				if (num_indices == 0) {
+					continue;
+				}
+
+				Vector<uint32_t> indices;
+				indices.resize(num_indices);
+
+				uint32_t offset = 0;
+				for (uint32_t face_index : fbx_mesh_mat.face_indices) {
+					ufbx_face face = fbx_mesh->faces[face_index];
+					switch (primitive) {
+						case Mesh::PRIMITIVE_POINTS: {
+							if (face.num_indices == 1) {
+								indices.write[offset] = face.index_begin;
+								offset += 1;
+							}
+						} break;
+						case Mesh::PRIMITIVE_LINES:
+							if (face.num_indices == 2) {
+								indices.write[offset] = face.index_begin;
+								indices.write[offset + 1] = face.index_begin + 1;
+								offset += 2;
+							}
+							break;
+						case Mesh::PRIMITIVE_TRIANGLES:
+							if (face.num_indices >= 3) {
+								uint32_t *dst = indices.ptrw() + offset;
+								size_t space = indices.size() - offset;
+								uint32_t num_triangles = ufbx_triangulate_face(dst, space, fbx_mesh, face);
+								offset += num_triangles * 3;
+
+								// Godot uses clockwise winding order!
+								for (uint32_t i = 0; i < num_triangles; i++) {
+									SWAP(dst[i * 3 + 0], dst[i * 3 + 2]);
+								}
+							}
+							break;
+					}
+				}
+				ERR_CONTINUE(offset != indices.size());
+
+				int32_t vertex_num = indices.size();
+				bool has_vertex_color = false;
+
+				uint32_t flags = 0;
+
+				Array array;
+				array.resize(Mesh::ARRAY_MAX);
+
+				array[Mesh::ARRAY_VERTEX] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_position, indices);
+				if (fbx_mesh->vertex_normal.exists) {
+					array[Mesh::ARRAY_NORMAL] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_normal, indices);
+				}
+				if (fbx_mesh->vertex_tangent.exists) {
+					array[Mesh::ARRAY_NORMAL] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_tangent, indices);
+				}
+				if (fbx_mesh->vertex_uv.exists) {
+					array[Mesh::ARRAY_TEX_UV] = _decode_vertex_attrib_vec2(fbx_mesh->vertex_uv, indices);
+				}
+				if (fbx_mesh->uv_sets.count >= 2 && fbx_mesh->uv_sets[1].vertex_uv.exists) {
+					array[Mesh::ARRAY_TEX_UV2] = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[1].vertex_uv, indices);
+				}
+				for (int custom_i = 0; custom_i < 3; custom_i++) {
+					Vector<float> cur_custom;
+					Vector<Vector2> texcoord_first;
+					Vector<Vector2> texcoord_second;
+
+					int texcoord_i = 2 + 2 * custom_i;
+					int num_channels = 0;
+					if (texcoord_i < fbx_mesh->uv_sets.count && fbx_mesh->uv_sets[texcoord_i].vertex_uv.exists) {
+						texcoord_first = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i].vertex_uv, indices);
+						num_channels = 2;
+					}
+					if (texcoord_i + 1 < fbx_mesh->uv_sets.count && fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv.exists) {
+						texcoord_second = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv, indices);
+						num_channels = 4;
+					}
+					if (!num_channels) {
+						break;
+					}
+					if (num_channels == 2 || num_channels == 4) {
+						cur_custom.resize(vertex_num * num_channels);
+						for (int32_t uv_i = 0; uv_i < texcoord_first.size() && uv_i < vertex_num; uv_i++) {
+							cur_custom.write[uv_i * num_channels + 0] = texcoord_first[uv_i].x;
+							cur_custom.write[uv_i * num_channels + 1] = texcoord_first[uv_i].y;
+						}
+						// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
+						for (int32_t uv_i = texcoord_first.size(); uv_i < vertex_num; uv_i++) {
+							cur_custom.write[uv_i * num_channels + 0] = 0;
+							cur_custom.write[uv_i * num_channels + 1] = 0;
+						}
+					}
+					if (num_channels == 4) {
+						for (int32_t uv_i = 0; uv_i < texcoord_second.size() && uv_i < vertex_num; uv_i++) {
+							// num_channels must be 4
+							cur_custom.write[uv_i * num_channels + 2] = texcoord_second[uv_i].x;
+							cur_custom.write[uv_i * num_channels + 3] = texcoord_second[uv_i].y;
+						}
+						// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
+						for (int32_t uv_i = texcoord_second.size(); uv_i < vertex_num; uv_i++) {
+							cur_custom.write[uv_i * num_channels + 2] = 0;
+							cur_custom.write[uv_i * num_channels + 3] = 0;
+						}
+					}
+					if (cur_custom.size() > 0) {
+						array[Mesh::ARRAY_CUSTOM0 + custom_i] = cur_custom;
+						int custom_shift = Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT + custom_i * Mesh::ARRAY_FORMAT_CUSTOM_BITS;
+						if (num_channels == 2) {
+							flags |= Mesh::ARRAY_CUSTOM_RG_FLOAT << custom_shift;
+						} else {
+							flags |= Mesh::ARRAY_CUSTOM_RGBA_FLOAT << custom_shift;
+						}
+					}
+				}
+				if (fbx_mesh->vertex_color.exists) {
+					array[Mesh::ARRAY_COLOR] = _decode_vertex_attrib_color(fbx_mesh->vertex_color, indices);
+					has_vertex_color = true;
+				}
+
+				int32_t num_skin_weights = 0;
+				ufbx_skin_deformer *fbx_skin = nullptr;
+				if (fbx_mesh->skin_deformers.count > 0) {
+					fbx_skin = fbx_mesh->skin_deformers[0];
+
+					// Tag all nodes to use the skin
+					FBXSkinIndex skin_i = FBXSkinIndex(fbx_skin->typed_id);
+					for (const ufbx_node *node : fbx_mesh->instances) {
+						p_state->nodes[node->typed_id]->skin = skin_i;
+					}
+
+					num_skin_weights = fbx_skin->max_weights_per_vertex > 4 ? 8 : 4;
+
+					Vector<int32_t> bones;
+					Vector<float> weights;
+
+					bones.resize(vertex_num * num_skin_weights);
+					weights.resize(vertex_num * num_skin_weights);
+					for (int32_t vertex_i = 0; vertex_i < vertex_num; vertex_i++) {
+						uint32_t fbx_vertex_index = fbx_mesh->vertex_indices[indices[vertex_i]];
+						ufbx_skin_vertex skin_vertex = fbx_skin->vertices[fbx_vertex_index];
+
+						float total_weight = 0.0f;
+						for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
+							ufbx_skin_weight skin_weight = fbx_skin->weights[skin_vertex.weight_begin + i];
+							bones.write[vertex_i * num_skin_weights + i] = int(skin_weight.cluster_index);
+							weights.write[vertex_i * num_skin_weights + i] = float(skin_weight.weight);
+							total_weight += float(skin_weight.weight);
+						}
+						if (total_weight > 0.0f) {
+							for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
+								weights.write[vertex_i * num_skin_weights + i] /= total_weight;
+							}
+						}
+
+						// Pad the rest with empty weights
+						for (int32_t i = int32_t(skin_vertex.num_weights); i < num_skin_weights; i++) {
+							bones.write[vertex_i * num_skin_weights + i] = 0; // TODO: What should this be padded with?
+							weights.write[vertex_i * num_skin_weights + i] = 0.0f;
+						}
+					}
+
+					array[Mesh::ARRAY_BONES] = bones;
+					array[Mesh::ARRAY_WEIGHTS] = weights;
+				}
+
+				bool generate_tangents = (primitive == Mesh::PRIMITIVE_TRIANGLES
+					&& !array[Mesh::ARRAY_TANGENT] && array[Mesh::ARRAY_TEX_UV] && array[Mesh::ARRAY_NORMAL]);
+
+				Ref<SurfaceTool> mesh_surface_tool;
+				mesh_surface_tool.instantiate();
+				mesh_surface_tool->create_from_triangle_arrays(array);
+				mesh_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
+				mesh_surface_tool->index();
+				if (generate_tangents) {
+					//must generate mikktspace tangents.. ergh..
+					mesh_surface_tool->generate_tangents();
+				}
+				array = mesh_surface_tool->commit_to_arrays();
+
+				Array morphs;
+				//blend shapes
+				if (fbx_mesh->blend_deformers.count > 0) {
+					print_verbose("FBX: Mesh has targets");
+
+					// TODO: GLTF uses `Mesh::BLEND_SHAPE_MODE_NORMALIZED` here with comment that using `RELATIVE`
+					// would require a refactor, is this still relevant?
+					import_mesh->set_blend_shape_mode(Mesh::BLEND_SHAPE_MODE_NORMALIZED);
+
+					for (const ufbx_blend_deformer *fbx_deformer : fbx_mesh->blend_deformers) {
+						for (const ufbx_blend_channel *fbx_channel : fbx_deformer->channels) {
+							if (fbx_channel->keyframes.count == 0) {
+								continue;
+							}
+
+							// Use the last shape keyframe by default
+							ufbx_blend_shape *fbx_shape = fbx_channel->keyframes[fbx_channel->keyframes.count - 1].shape;
+
+							String bs_name;
+							if (fbx_channel->name.length > 0) {
+								bs_name = _as_string(fbx_channel->name);
+							} else {
+								bs_name = String("morph_") + itos(morphs.size());
+							}
+							import_mesh->add_blend_shape(bs_name);
+							blend_weights.push_back(float(fbx_channel->weight));
+
+							Array array_copy;
+							array_copy.resize(Mesh::ARRAY_MAX);
+
+							for (int l = 0; l < Mesh::ARRAY_MAX; l++) {
+								array_copy[l] = array[l];
+							}
+
+							if (fbx_shape->position_offsets.count > 0) {
+								Vector<Vector3> varr;
+								const Vector<Vector3> src_varr = array[Mesh::ARRAY_VERTEX];
+								const int size = src_varr.size();
+								ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
+								{
+									const int max_idx = varr.size();
+									varr.resize(size);
+
+									Vector3 *w_varr = varr.ptrw();
+									const Vector3 *r_varr = varr.ptr();
+									const Vector3 *r_src_varr = src_varr.ptr();
+									for (int l = 0; l < size; l++) {
+										int32_t vertex_index = fbx_mesh->vertex_indices[uint32_t(indices[l])];
+										Vector3 offset = _as_vec3(ufbx_get_blend_shape_vertex_offset(fbx_shape, vertex_index));
+										w_varr[l] = r_varr[l] + offset;
+									}
+								}
+								array_copy[Mesh::ARRAY_VERTEX] = varr;
+							}
+
+							Ref<SurfaceTool> blend_surface_tool;
+							blend_surface_tool.instantiate();
+							blend_surface_tool->create_from_triangle_arrays(array_copy);
+							mesh_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
+							blend_surface_tool->index();
+							if (generate_tangents) {
+								blend_surface_tool->generate_tangents();
+							}
+							array_copy = blend_surface_tool->commit_to_arrays();
+
+							// Enforce blend shape mask array format
+							for (int l = 0; l < Mesh::ARRAY_MAX; l++) {
+								if (!(Mesh::ARRAY_FORMAT_BLEND_SHAPE_MASK & (1 << l))) {
+									array_copy[l] = Variant();
+								}
+							}
+
+							morphs.push_back(array_copy);
+						}
+					}
+				}
+
+				Ref<Material> mat;
+				String mat_name;
+				if (!p_state->discard_meshes_and_materials) {
+					if (fbx_mesh_mat.material) {
+						const int material = int(fbx_mesh_mat.material->typed_id);
+						ERR_FAIL_INDEX_V(material, p_state->materials.size(), ERR_FILE_CORRUPT);
+						Ref<Material> mat3d = p_state->materials[material];
+						ERR_FAIL_NULL_V(mat3d, ERR_FILE_CORRUPT);
+
+						Ref<BaseMaterial3D> base_material = mat3d;
+						if (has_vertex_color && base_material.is_valid()) {
+							base_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+						}
+						mat = mat3d;
+
+					} else {
+						Ref<StandardMaterial3D> mat3d;
+						mat3d.instantiate();
+						if (has_vertex_color) {
+							mat3d->set_flag(StandardMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+						}
+						mat = mat3d;
+					}
+					ERR_FAIL_NULL_V(mat, ERR_FILE_CORRUPT);
+					mat_name = mat->get_name();
+				}
+				import_mesh->add_surface(primitive, array, morphs,
+						Dictionary(), mat, mat_name, flags);
 			}
 		}
+
+		Ref<FBXMesh> mesh;
+		mesh.instantiate();
 		mesh->set_blend_weights(blend_weights);
 		mesh->set_mesh(import_mesh);
 
 		p_state->meshes.push_back(mesh);
 	}
 
-	print_verbose("glTF: Total meshes: " + itos(p_state->meshes.size()));
+	print_verbose("FBX: Total meshes: " + itos(p_state->meshes.size()));
 
 	return OK;
 }
 
-Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension) {
+Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_filename, int p_index) {
 	Ref<Image> r_image;
 	r_image.instantiate();
-	// Check if any FBXDocumentExtensions want to import this data as an image.
-	for (Ref<FBXDocumentExtension> ext : document_extensions) {
-		ERR_CONTINUE(ext.is_null());
-		Error err = ext->parse_image_data(p_state, p_bytes, p_mime_type, r_image);
-		ERR_CONTINUE_MSG(err != OK, "GLTF: Encountered error " + itos(err) + " when parsing image " + itos(p_index) + " in file " + p_state->filename + ". Continuing.");
-		if (!r_image->is_empty()) {
-			r_file_extension = ext->get_image_file_extension();
-			return r_image;
-		}
-	}
-	// If no extension wanted to import this data as an image, try to load a PNG or JPEG.
-	// First we honor the mime types if they were defined.
-	if (p_mime_type == "image/png") { // Load buffer as PNG.
+	// Try to import first based on filename.
+	String filename_lower = p_filename.to_lower();
+	if (filename_lower.ends_with(".png")) {
 		r_image->load_png_from_buffer(p_bytes);
-		r_file_extension = ".png";
-	} else if (p_mime_type == "image/jpeg") { // Loader buffer as JPEG.
+	} else if (filename_lower.ends_with(".jpg")) {
 		r_image->load_jpg_from_buffer(p_bytes);
-		r_file_extension = ".jpg";
 	}
 	// If we didn't pass the above tests, we attempt loading as PNG and then JPEG directly.
-	// This covers URIs with base64-encoded data with application/* type but
-	// no optional mimeType property, or bufferViews with a bogus mimeType
-	// (e.g. `image/jpeg` but the data is actually PNG).
-	// That's not *exactly* what the spec mandates but this lets us be
-	// lenient with bogus glb files which do exist in production.
 	if (r_image->is_empty()) { // Try PNG first.
 		r_image->load_png_from_buffer(p_bytes);
 	}
@@ -2315,7 +1869,7 @@ Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, con
 	}
 	// If it still can't be loaded, give up and insert an empty image as placeholder.
 	if (r_image->is_empty()) {
-		ERR_PRINT(vformat("glTF: Couldn't load image index '%d' with its given mimetype: %s.", p_index, p_mime_type));
+		ERR_PRINT(vformat("FBX: Couldn't load image index '%d'", p_index));
 	}
 	return r_image;
 }
@@ -2417,153 +1971,50 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 
 Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_path) {
 	ERR_FAIL_NULL_V(p_state, ERR_INVALID_PARAMETER);
-	if (!p_state->json.has("images")) {
-		return OK;
-	}
 
-	// Ref: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#images
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+	for (int i = 0; i < fbx_scene->texture_files.count; i++) {
+		const ufbx_texture_file &fbx_texture_file = fbx_scene->texture_files[i];
+		String path =_as_string(fbx_texture_file.filename);
 
-	const Array &images = p_state->json["images"];
-	HashSet<String> used_names;
-	for (int i = 0; i < images.size(); i++) {
-		const Dictionary &dict = images[i];
-
-		// glTF 2.0 supports PNG and JPEG types, which can be specified as (from spec):
-		// "- a URI to an external file in one of the supported images formats, or
-		//  - a URI with embedded base64-encoded data, or
-		//  - a reference to a bufferView; in that case mimeType must be defined."
-		// Since mimeType is optional for external files and base64 data, we'll have to
-		// fall back on letting Godot parse the data to figure out if it's PNG or JPEG.
-
-		// We'll assume that we use either URI or bufferView, so let's warn the user
-		// if their image somehow uses both. And fail if it has neither.
-		ERR_CONTINUE_MSG(!dict.has("uri") && !dict.has("bufferView"), "Invalid image definition in glTF file, it should specify an 'uri' or 'bufferView'.");
-		if (dict.has("uri") && dict.has("bufferView")) {
-			WARN_PRINT("Invalid image definition in glTF file using both 'uri' and 'bufferView'. 'uri' will take precedence.");
-		}
-
-		String mime_type;
-		if (dict.has("mimeType")) { // Should be "image/png", "image/jpeg", or something handled by an extension.
-			mime_type = dict["mimeType"];
-		}
-
-		String image_name;
-		if (dict.has("name")) {
-			image_name = dict["name"];
-			image_name = image_name.get_file().get_basename().validate_filename();
-		}
-		if (image_name.is_empty()) {
-			image_name = itos(i);
-		}
-		while (used_names.has(image_name)) {
-			image_name += "_" + itos(i);
-		}
-		used_names.insert(image_name);
-		// Load the image data. If we get a byte array, store here for later.
 		Vector<uint8_t> data;
-		if (dict.has("uri")) {
-			// Handles the first two bullet points from the spec (embedded data, or external file).
-			String uri = dict["uri"];
-			if (uri.begins_with("data:")) { // Embedded data using base64.
-				data = _parse_base64_uri(uri);
-				// mimeType is optional, but if we have it defined in the URI, let's use it.
-				if (mime_type.is_empty() && uri.contains(";")) {
-					// Trim "data:" prefix which is 5 characters long, and end at ";base64".
-					mime_type = uri.substr(5, uri.find(";base64") - 5);
-				}
-			} else { // Relative path to an external image file.
-				ERR_FAIL_COND_V(p_base_path.is_empty(), ERR_INVALID_PARAMETER);
-				uri = uri.uri_decode();
-				uri = p_base_path.path_join(uri).replace("\\", "/"); // Fix for Windows.
-				// ResourceLoader will rely on the file extension to use the relevant loader.
-				// The spec says that if mimeType is defined, it should take precedence (e.g.
-				// there could be a `.png` image which is actually JPEG), but there's no easy
-				// API for that in Godot, so we'd have to load as a buffer (i.e. embedded in
-				// the material), so we only do that only as fallback.
-				Ref<Texture2D> texture = ResourceLoader::load(uri);
-				if (texture.is_valid()) {
-					p_state->images.push_back(texture);
-					p_state->source_images.push_back(texture->get_image());
-					continue;
-				}
-				// mimeType is optional, but if we have it in the file extension, let's use it.
-				// If the mimeType does not match with the file extension, either it should be
-				// specified in the file, or the FBXDocumentExtension should handle it.
-				if (mime_type.is_empty()) {
-					mime_type = "image/" + uri.get_extension();
-				}
-				// Fallback to loading as byte array. This enables us to support the
-				// spec's requirement that we honor mimetype regardless of file URI.
-				data = FileAccess::get_file_as_bytes(uri);
-				if (data.size() == 0) {
-					WARN_PRINT(vformat("glTF: Image index '%d' couldn't be loaded as a buffer of MIME type '%s' from URI: %s because there was no data to load. Skipping it.", i, mime_type, uri));
-					p_state->images.push_back(Ref<Texture2D>()); // Placeholder to keep count.
-					p_state->source_images.push_back(Ref<Image>());
-					continue;
-				}
+		if (fbx_texture_file.content.size > 0 && fbx_texture_file.content.size <= INT_MAX) {
+			data.resize(int(fbx_texture_file.content.size));
+			memcpy(data.ptrw(), fbx_texture_file.content.data, fbx_texture_file.content.size);
+		} else {
+			Ref<Texture2D> texture = ResourceLoader::load(path);
+			if (texture.is_valid()) {
+				p_state->images.push_back(texture);
+				p_state->source_images.push_back(texture->get_image());
+				continue;
 			}
-		} else if (dict.has("bufferView")) {
-			// Handles the third bullet point from the spec (bufferView).
-			ERR_FAIL_COND_V_MSG(mime_type.is_empty(), ERR_FILE_CORRUPT, vformat("glTF: Image index '%d' specifies 'bufferView' but no 'mimeType', which is invalid.", i));
-			const FBXBufferViewIndex bvi = dict["bufferView"];
-			ERR_FAIL_INDEX_V(bvi, p_state->buffer_views.size(), ERR_PARAMETER_RANGE_ERROR);
-			Ref<FBXBufferView> bv = p_state->buffer_views[bvi];
-			const FBXBufferIndex bi = bv->buffer;
-			ERR_FAIL_INDEX_V(bi, p_state->buffers.size(), ERR_PARAMETER_RANGE_ERROR);
-			ERR_FAIL_COND_V(bv->byte_offset + bv->byte_length > p_state->buffers[bi].size(), ERR_FILE_CORRUPT);
-			const PackedByteArray &buffer = p_state->buffers[bi];
-			data = buffer.slice(bv->byte_offset, bv->byte_offset + bv->byte_length);
+			// Fallback to loading as byte array. This enables us to support the
+			// spec's requirement that we honor mimetype regardless of file URI.
+			data = FileAccess::get_file_as_bytes(path);
+			if (data.size() == 0) {
+				WARN_PRINT(vformat("FBX: Image index '%d' couldn't be loaded from path: %s because there was no data to load. Skipping it.", i, path));
+				p_state->images.push_back(Ref<Texture2D>()); // Placeholder to keep count.
+				p_state->source_images.push_back(Ref<Image>());
+				continue;
+			}
 		}
-		// Done loading the image data bytes. Check that we actually got data to parse.
-		// Note: There are paths above that return early, so this point might not be reached.
-		if (data.is_empty()) {
-			WARN_PRINT(vformat("glTF: Image index '%d' couldn't be loaded, no data found. Skipping it.", i));
-			p_state->images.push_back(Ref<Texture2D>()); // Placeholder to keep count.
-			p_state->source_images.push_back(Ref<Image>());
-			continue;
-		}
+
 		// Parse the image data from bytes into an Image resource and save if needed.
 		String file_extension;
-		Ref<Image> img = _parse_image_bytes_into_image(p_state, data, mime_type, i, file_extension);
-		img->set_name(image_name);
+		Ref<Image> img = _parse_image_bytes_into_image(p_state, data, path, i);
+		img->set_name(itos(i));
 		_parse_image_save_image(p_state, data, file_extension, i, img);
 	}
 
-	print_verbose("glTF: Total images: " + itos(p_state->images.size()));
-
-	return OK;
-}
-
-Error FBXDocument::_parse_textures(Ref<FBXState> p_state) {
-	if (!p_state->json.has("textures")) {
-		return OK;
+	// Create a texture for each file texture
+	for (int i = 0; i < fbx_scene->texture_files.count; i++) {
+		Ref<FBXTexture> texture;
+		texture.instantiate();
+		texture->set_src_image(FBXImageIndex(i));
+		p_state->textures.push_back(texture);
 	}
 
-	const Array &textures = p_state->json["textures"];
-	for (FBXTextureIndex i = 0; i < textures.size(); i++) {
-		const Dictionary &texture_dict = textures[i];
-		Ref<FBXTexture> gltf_texture;
-		gltf_texture.instantiate();
-		// Check if any FBXDocumentExtensions want to handle this texture JSON.
-		for (Ref<FBXDocumentExtension> ext : document_extensions) {
-			ERR_CONTINUE(ext.is_null());
-			Error err = ext->parse_texture_json(p_state, texture_dict, gltf_texture);
-			ERR_CONTINUE_MSG(err != OK, "GLTF: Encountered error " + itos(err) + " when parsing texture JSON " + String(Variant(texture_dict)) + " in file " + p_state->filename + ". Continuing.");
-			if (gltf_texture->get_src_image() != -1) {
-				break;
-			}
-		}
-		if (gltf_texture->get_src_image() == -1) {
-			// No extensions handled it, so use the base GLTF source.
-			// This may be the fallback, or the only option anyway.
-			ERR_FAIL_COND_V(!texture_dict.has("source"), ERR_PARSE_ERROR);
-			gltf_texture->set_src_image(texture_dict["source"]);
-		}
-		if (gltf_texture->get_sampler() == -1 && texture_dict.has("sampler")) {
-			gltf_texture->set_sampler(texture_dict["sampler"]);
-		}
-		p_state->textures.push_back(gltf_texture);
-	}
+	print_verbose("FBX: Total images: " + itos(p_state->images.size()));
 
 	return OK;
 }
@@ -2635,193 +2086,99 @@ Ref<FBXTextureSampler> FBXDocument::_get_sampler_for_texture(Ref<FBXState> p_sta
 	}
 }
 
-Error FBXDocument::_parse_texture_samplers(Ref<FBXState> p_state) {
-	p_state->default_texture_sampler.instantiate();
-	p_state->default_texture_sampler->set_min_filter(FBXTextureSampler::FilterMode::LINEAR_MIPMAP_LINEAR);
-	p_state->default_texture_sampler->set_mag_filter(FBXTextureSampler::FilterMode::LINEAR);
-	p_state->default_texture_sampler->set_wrap_s(FBXTextureSampler::WrapMode::REPEAT);
-	p_state->default_texture_sampler->set_wrap_t(FBXTextureSampler::WrapMode::REPEAT);
-
-	if (!p_state->json.has("samplers")) {
-		return OK;
-	}
-
-	const Array &samplers = p_state->json["samplers"];
-	for (int i = 0; i < samplers.size(); ++i) {
-		const Dictionary &d = samplers[i];
-
-		Ref<FBXTextureSampler> sampler;
-		sampler.instantiate();
-
-		if (d.has("minFilter")) {
-			sampler->set_min_filter(d["minFilter"]);
-		} else {
-			sampler->set_min_filter(FBXTextureSampler::FilterMode::LINEAR_MIPMAP_LINEAR);
-		}
-		if (d.has("magFilter")) {
-			sampler->set_mag_filter(d["magFilter"]);
-		} else {
-			sampler->set_mag_filter(FBXTextureSampler::FilterMode::LINEAR);
-		}
-
-		if (d.has("wrapS")) {
-			sampler->set_wrap_s(d["wrapS"]);
-		} else {
-			sampler->set_wrap_s(FBXTextureSampler::WrapMode::DEFAULT);
-		}
-
-		if (d.has("wrapT")) {
-			sampler->set_wrap_t(d["wrapT"]);
-		} else {
-			sampler->set_wrap_t(FBXTextureSampler::WrapMode::DEFAULT);
-		}
-
-		p_state->texture_samplers.push_back(sampler);
-	}
-
-	return OK;
-}
-
 Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
-	if (!p_state->json.has("materials")) {
-		return OK;
-	}
-
-	const Array &materials = p_state->json["materials"];
-	for (FBXMaterialIndex i = 0; i < materials.size(); i++) {
-		const Dictionary &material_dict = materials[i];
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+	for (FBXMaterialIndex i = 0; i < fbx_scene->materials.count; i++) {
+		const ufbx_material *fbx_material = fbx_scene->materials[i];
 
 		Ref<StandardMaterial3D> material;
 		material.instantiate();
-		if (material_dict.has("name") && !String(material_dict["name"]).is_empty()) {
-			material->set_name(material_dict["name"]);
+		if (fbx_material->name.length > 0) {
+			material->set_name(_as_string(fbx_material->name));
 		} else {
 			material->set_name(vformat("material_%s", itos(i)));
 		}
 		material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
 		Dictionary material_extensions;
-		if (material_dict.has("extensions")) {
-			material_extensions = material_dict["extensions"];
+
+		if (fbx_material->pbr.base_color.has_value) {
+			material->set_albedo(_material_color(fbx_material->pbr.base_color, fbx_material->pbr.base_factor));
 		}
 
-		if (material_extensions.has("KHR_materials_unlit")) {
-			material->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
-		}
-
-		if (material_extensions.has("KHR_materials_emissive_strength")) {
-			Dictionary emissive_strength = material_extensions["KHR_materials_emissive_strength"];
-			if (emissive_strength.has("emissiveStrength")) {
-				material->set_emission_energy_multiplier(emissive_strength["emissiveStrength"]);
+		const ufbx_texture *base_texture = _get_file_texture(fbx_material->pbr.base_color.texture);
+		if (base_texture) {
+			{
+				bool wrap = base_texture->wrap_u == UFBX_WRAP_REPEAT && base_texture->wrap_v == UFBX_WRAP_REPEAT;
+				material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, wrap);
+				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC));
+			}
+			if (!fbx_material->pbr.base_color.has_value) {
+				material->set_albedo(Color(1, 1, 1));
+			}
+			if (base_texture->has_uv_transform) {
+				// TODO: Does not support rotation, could be inverted?
+				material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
+				material->set_uv1_scale(_as_vec3(base_texture->uv_transform.scale));
 			}
 		}
-		if (material_dict.has("pbrMetallicRoughness")) {
-			const Dictionary &mr = material_dict["pbrMetallicRoughness"];
-			if (mr.has("baseColorFactor")) {
-				const Array &arr = mr["baseColorFactor"];
-				ERR_FAIL_COND_V(arr.size() != 4, ERR_PARSE_ERROR);
-				const Color c = Color(arr[0], arr[1], arr[2], arr[3]).linear_to_srgb();
-				material->set_albedo(c);
-			}
 
-			if (mr.has("baseColorTexture")) {
-				const Dictionary &bct = mr["baseColorTexture"];
-				if (bct.has("index")) {
-					Ref<FBXTextureSampler> bct_sampler = _get_sampler_for_texture(p_state, bct["index"]);
-					material->set_texture_filter(bct_sampler->get_filter_mode());
-					material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, bct_sampler->get_wrap_mode());
-					material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, _get_texture(p_state, bct["index"], TEXTURE_TYPE_GENERIC));
-				}
-				if (!mr.has("baseColorFactor")) {
-					material->set_albedo(Color(1, 1, 1));
-				}
-				_set_texture_transform_uv1(bct, material);
-			}
-
-			if (mr.has("metallicFactor")) {
-				material->set_metallic(mr["metallicFactor"]);
+		if (fbx_material->features.pbr.enabled) {
+			if (fbx_material->pbr.metalness.has_value) {
+				material->set_metallic(float(fbx_material->pbr.metalness.value_real));
 			} else {
 				material->set_metallic(1.0);
 			}
 
-			if (mr.has("roughnessFactor")) {
-				material->set_roughness(mr["roughnessFactor"]);
+			if (fbx_material->pbr.roughness.has_value) {
+				material->set_roughness(float(fbx_material->pbr.roughness.value_real));
 			} else {
 				material->set_roughness(1.0);
 			}
 
-			if (mr.has("metallicRoughnessTexture")) {
-				const Dictionary &bct = mr["metallicRoughnessTexture"];
-				if (bct.has("index")) {
-					const Ref<Texture2D> t = _get_texture(p_state, bct["index"], TEXTURE_TYPE_GENERIC);
-					material->set_texture(BaseMaterial3D::TEXTURE_METALLIC, t);
-					material->set_metallic_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_BLUE);
-					material->set_texture(BaseMaterial3D::TEXTURE_ROUGHNESS, t);
-					material->set_roughness_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_GREEN);
-					if (!mr.has("metallicFactor")) {
-						material->set_metallic(1);
-					}
-					if (!mr.has("roughnessFactor")) {
-						material->set_roughness(1);
-					}
-				}
+			const ufbx_texture *metalness_texture = _get_file_texture(fbx_material->pbr.metalness.texture);
+			if (metalness_texture) {
+				material->set_texture(BaseMaterial3D::TEXTURE_METALLIC, _get_texture(p_state, FBXTextureIndex(metalness_texture->file_index), TEXTURE_TYPE_GENERIC));
+				material->set_metallic_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
+			}
+
+			const ufbx_texture *roughness_texture = _get_file_texture(fbx_material->pbr.roughness.texture);
+			if (roughness_texture) {
+				material->set_texture(BaseMaterial3D::TEXTURE_ROUGHNESS, _get_texture(p_state, FBXTextureIndex(roughness_texture->file_index), TEXTURE_TYPE_GENERIC));
+				material->set_roughness_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
 			}
 		}
 
-		if (material_dict.has("normalTexture")) {
-			const Dictionary &bct = material_dict["normalTexture"];
-			if (bct.has("index")) {
-				material->set_texture(BaseMaterial3D::TEXTURE_NORMAL, _get_texture(p_state, bct["index"], TEXTURE_TYPE_NORMAL));
-				material->set_feature(BaseMaterial3D::FEATURE_NORMAL_MAPPING, true);
-			}
-			if (bct.has("scale")) {
-				material->set_normal_scale(bct["scale"]);
-			}
-		}
-		if (material_dict.has("occlusionTexture")) {
-			const Dictionary &bct = material_dict["occlusionTexture"];
-			if (bct.has("index")) {
-				material->set_texture(BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION, _get_texture(p_state, bct["index"], TEXTURE_TYPE_GENERIC));
-				material->set_ao_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
-				material->set_feature(BaseMaterial3D::FEATURE_AMBIENT_OCCLUSION, true);
+		const ufbx_texture *normal_texture = _get_file_texture(fbx_material->pbr.normal_map.texture);
+		if (normal_texture) {
+			material->set_texture(BaseMaterial3D::TEXTURE_NORMAL, _get_texture(p_state, FBXTextureIndex(normal_texture->file_index), TEXTURE_TYPE_NORMAL));
+			material->set_feature(BaseMaterial3D::FEATURE_NORMAL_MAPPING, true);
+			if (fbx_material->pbr.normal_map.has_value) {
+				material->set_normal_scale(fbx_material->pbr.normal_map.value_real);
 			}
 		}
 
-		if (material_dict.has("emissiveFactor")) {
-			const Array &arr = material_dict["emissiveFactor"];
-			ERR_FAIL_COND_V(arr.size() != 3, ERR_PARSE_ERROR);
-			const Color c = Color(arr[0], arr[1], arr[2]).linear_to_srgb();
+		const ufbx_texture *occlusion_texture = _get_file_texture(fbx_material->pbr.ambient_occlusion.texture);
+		if (occlusion_texture) {
+			material->set_texture(BaseMaterial3D::TEXTURE_AMBIENT_OCCLUSION, _get_texture(p_state, FBXTextureIndex(occlusion_texture->file_index), TEXTURE_TYPE_GENERIC));
+			material->set_ao_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
+			material->set_feature(BaseMaterial3D::FEATURE_AMBIENT_OCCLUSION, true);
+		}
+
+		if (fbx_material->pbr.emission_color.has_value) {
 			material->set_feature(BaseMaterial3D::FEATURE_EMISSION, true);
-
-			material->set_emission(c);
+			material->set_emission(_material_color(fbx_material->pbr.emission_color));
+			material->set_emission_energy_multiplier(float(fbx_material->pbr.emission_factor.value_real));
 		}
 
-		if (material_dict.has("emissiveTexture")) {
-			const Dictionary &bct = material_dict["emissiveTexture"];
-			if (bct.has("index")) {
-				material->set_texture(BaseMaterial3D::TEXTURE_EMISSION, _get_texture(p_state, bct["index"], TEXTURE_TYPE_GENERIC));
-				material->set_feature(BaseMaterial3D::FEATURE_EMISSION, true);
-				material->set_emission(Color(0, 0, 0));
-			}
+		const ufbx_texture *emission_texture = _get_file_texture(fbx_material->pbr.ambient_occlusion.texture);
+		if (emission_texture) {
+			material->set_texture(BaseMaterial3D::TEXTURE_EMISSION, _get_texture(p_state, FBXTextureIndex(emission_texture->file_index), TEXTURE_TYPE_GENERIC));
+			material->set_feature(BaseMaterial3D::FEATURE_EMISSION, true);
+			material->set_emission(Color(0, 0, 0));
 		}
 
-		if (material_dict.has("doubleSided")) {
-			const bool ds = material_dict["doubleSided"];
-			if (ds) {
-				material->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
-			}
-		}
-		if (material_dict.has("alphaMode")) {
-			const String &am = material_dict["alphaMode"];
-			if (am == "BLEND") {
-				material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS);
-			} else if (am == "MASK") {
-				material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
-				if (material_dict.has("alphaCutoff")) {
-					material->set_alpha_scissor_threshold(material_dict["alphaCutoff"]);
-				} else {
-					material->set_alpha_scissor_threshold(0.5f);
-				}
-			}
+		if (fbx_material->features.double_sided.enabled && fbx_material->features.double_sided.is_explicit) {
+			material->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
 		}
 		p_state->materials.push_back(material);
 	}
@@ -2829,46 +2186,6 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 	print_verbose("Total materials: " + itos(p_state->materials.size()));
 
 	return OK;
-}
-
-void FBXDocument::_set_texture_transform_uv1(const Dictionary &p_dict, Ref<BaseMaterial3D> p_material) {
-	if (p_dict.has("extensions")) {
-		const Dictionary &extensions = p_dict["extensions"];
-		if (extensions.has("KHR_texture_transform")) {
-			if (p_material.is_valid()) {
-				const Dictionary &texture_transform = extensions["KHR_texture_transform"];
-				const Array &offset_arr = texture_transform["offset"];
-				if (offset_arr.size() == 2) {
-					const Vector3 offset_vector3 = Vector3(offset_arr[0], offset_arr[1], 0.0f);
-					p_material->set_uv1_offset(offset_vector3);
-				}
-
-				const Array &scale_arr = texture_transform["scale"];
-				if (scale_arr.size() == 2) {
-					const Vector3 scale_vector3 = Vector3(scale_arr[0], scale_arr[1], 1.0f);
-					p_material->set_uv1_scale(scale_vector3);
-				}
-			}
-		}
-	}
-}
-
-void FBXDocument::spec_gloss_to_metal_base_color(const Color &p_specular_factor, const Color &p_diffuse, Color &r_base_color, float &r_metallic) {
-	const Color DIELECTRIC_SPECULAR = Color(0.04f, 0.04f, 0.04f);
-	Color specular = Color(p_specular_factor.r, p_specular_factor.g, p_specular_factor.b);
-	const float one_minus_specular_strength = 1.0f - get_max_component(specular);
-	const float dielectric_specular_red = DIELECTRIC_SPECULAR.r;
-	float brightness_diffuse = get_perceived_brightness(p_diffuse);
-	const float brightness_specular = get_perceived_brightness(specular);
-	r_metallic = solve_metallic(dielectric_specular_red, brightness_diffuse, brightness_specular, one_minus_specular_strength);
-	const float one_minus_metallic = 1.0f - r_metallic;
-	const Color base_color_from_diffuse = p_diffuse * (one_minus_specular_strength / (1.0f - dielectric_specular_red) / MAX(one_minus_metallic, CMP_EPSILON));
-	const Color base_color_from_specular = (specular - (DIELECTRIC_SPECULAR * (one_minus_metallic))) * (1.0f / MAX(r_metallic, CMP_EPSILON));
-	r_base_color.r = Math::lerp(base_color_from_diffuse.r, base_color_from_specular.r, r_metallic * r_metallic);
-	r_base_color.g = Math::lerp(base_color_from_diffuse.g, base_color_from_specular.g, r_metallic * r_metallic);
-	r_base_color.b = Math::lerp(base_color_from_diffuse.b, base_color_from_specular.b, r_metallic * r_metallic);
-	r_base_color.a = p_diffuse.a;
-	r_base_color = r_base_color.clamp();
 }
 
 FBXNodeIndex FBXDocument::_find_highest_node(Ref<FBXState> p_state, const Vector<FBXNodeIndex> &p_subset) {
@@ -3102,46 +2419,29 @@ Error FBXDocument::_verify_skin(Ref<FBXState> p_state, Ref<FBXSkin> p_skin) {
 }
 
 Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
-	if (!p_state->json.has("skins")) {
-		return OK;
-	}
-
-	const Array &skins = p_state->json["skins"];
+	const ufbx_scene *fbx_scene = p_state->scene.get();
 
 	// Create the base skins, and mark nodes that are joints
-	for (int i = 0; i < skins.size(); i++) {
-		const Dictionary &d = skins[i];
+	for (const ufbx_skin_deformer *fbx_skin : fbx_scene->skin_deformers) {
 
 		Ref<FBXSkin> skin;
 		skin.instantiate();
 
-		ERR_FAIL_COND_V(!d.has("joints"), ERR_PARSE_ERROR);
-
-		const Array &joints = d["joints"];
-
-		if (d.has("inverseBindMatrices")) {
-			skin->inverse_binds = _decode_accessor_as_xform(p_state, d["inverseBindMatrices"], false);
-			ERR_FAIL_COND_V(skin->inverse_binds.size() != joints.size(), ERR_PARSE_ERROR);
-		}
-
-		for (int j = 0; j < joints.size(); j++) {
-			const FBXNodeIndex node = joints[j];
-			ERR_FAIL_INDEX_V(node, p_state->nodes.size(), ERR_PARSE_ERROR);
+		skin->inverse_binds.resize(fbx_skin->clusters.count);
+		for (int i = 0; i < fbx_skin->clusters.count; i++) {
+			const ufbx_skin_cluster *fbx_cluster = fbx_skin->clusters[i];
+			skin->inverse_binds.write[i] = _as_xform(fbx_cluster->geometry_to_bone);
+			const FBXNodeIndex node = fbx_cluster->bone_node->typed_id;
 
 			skin->joints.push_back(node);
 			skin->joints_original.push_back(node);
-
 			p_state->nodes.write[node]->joint = true;
 		}
 
-		if (d.has("name") && !String(d["name"]).is_empty()) {
-			skin->set_name(d["name"]);
+		if (fbx_skin->name.length > 0) {
+			skin->set_name(_as_string(fbx_skin->name));
 		} else {
-			skin->set_name(vformat("skin_%s", itos(i)));
-		}
-
-		if (d.has("skeleton")) {
-			skin->skin_root = d["skeleton"];
+			skin->set_name(vformat("skin_%s", itos(fbx_skin->typed_id)));
 		}
 
 		p_state->skins.push_back(skin);
@@ -3587,17 +2887,30 @@ void FBXDocument::_remove_duplicate_skins(Ref<FBXState> p_state) {
 }
 
 Error FBXDocument::_parse_cameras(Ref<FBXState> p_state) {
-	if (!p_state->json.has("cameras")) {
-		return OK;
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+	for (FBXCameraIndex i = 0; i < fbx_scene->cameras.count; i++) {
+		const ufbx_camera *fbx_camera = fbx_scene->cameras[i];
+
+		Ref<FBXCamera> camera;
+		camera.instantiate();
+
+		// TODO: Check units.
+		if (fbx_camera->projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE) {
+			camera->set_perspective(true);
+			camera->set_fov(Math::deg_to_rad(real_t(fbx_camera->field_of_view_deg.y)));
+		} else {
+			camera->set_perspective(false);
+			camera->set_size_mag(real_t(fbx_camera->orthographic_extent));
+		}
+		if (fbx_camera->near_plane != 0.0f) {
+			camera->set_depth_near(fbx_camera->near_plane);
+		}
+		if (fbx_camera->far_plane != 0.0f) {
+			camera->set_depth_far(fbx_camera->far_plane);
+		}
 	}
 
-	const Array cameras = p_state->json["cameras"];
-
-	for (FBXCameraIndex i = 0; i < cameras.size(); i++) {
-		p_state->cameras.push_back(FBXCamera::from_dictionary(cameras[i]));
-	}
-
-	print_verbose("glTF: Total cameras: " + itos(p_state->cameras.size()));
+	print_verbose("FBX: Total cameras: " + itos(p_state->cameras.size()));
 
 	return OK;
 }
@@ -3618,27 +2931,15 @@ String FBXDocument::interpolation_to_string(const FBXAnimation::Interpolation p_
 }
 
 Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
-	if (!p_state->json.has("animations")) {
-		return OK;
-	}
-
-	const Array &animations = p_state->json["animations"];
-
-	for (FBXAnimationIndex i = 0; i < animations.size(); i++) {
-		const Dictionary &d = animations[i];
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+	for (FBXAnimationIndex i = 0; i < fbx_scene->anim_stacks.count; i++) {
+		const ufbx_anim_stack *fbx_anim_stack = fbx_scene->anim_stacks[i];
 
 		Ref<FBXAnimation> animation;
 		animation.instantiate();
 
-		if (!d.has("channels") || !d.has("samplers")) {
-			continue;
-		}
-
-		Array channels = d["channels"];
-		Array samplers = d["samplers"];
-
-		if (d.has("name")) {
-			const String anim_name = d["name"];
+		if (fbx_anim_stack->name.length > 0) {
+			const String anim_name = _as_string(fbx_anim_stack->name);
 			const String anim_name_lower = anim_name.to_lower();
 			if (anim_name_lower.begins_with("loop") || anim_name_lower.ends_with("loop") || anim_name_lower.begins_with("cycle") || anim_name_lower.ends_with("cycle")) {
 				animation->set_loop(true);
@@ -3646,111 +2947,116 @@ Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 			animation->set_name(_gen_unique_animation_name(p_state, anim_name));
 		}
 
-		for (int j = 0; j < channels.size(); j++) {
-			const Dictionary &c = channels[j];
-			if (!c.has("target")) {
-				continue;
+		struct AnimTrack {
+			double min_time = DBL_MAX;
+			double max_time = -DBL_MAX;
+			bool is_valid() const {
+				return min_time <= max_time;
 			}
+		};
 
-			const Dictionary &t = c["target"];
-			if (!t.has("node") || !t.has("path")) {
-				continue;
+		struct AnimNode {
+			AnimTrack translation;
+			AnimTrack rotation;
+			AnimTrack scale;
+		};
+
+		HashMap<FBXNodeIndex, AnimNode> anim_nodes;
+
+		for (const ufbx_anim_layer *fbx_anim_layer : fbx_anim_stack->layers) {
+			for (const ufbx_anim_prop &fbx_anim_prop : fbx_anim_layer->anim_props) {
+				const ufbx_element *target = fbx_anim_prop.element;
+				if (target->type == UFBX_ELEMENT_NODE) {
+					String prop = _as_string(fbx_anim_prop.prop_name);
+					AnimTrack *track = nullptr;
+					if (prop == UFBX_Lcl_Translation) {
+						track = &anim_nodes[target->typed_id].translation;
+					} else if (prop == UFBX_Lcl_Rotation) {
+						track = &anim_nodes[target->typed_id].rotation;
+					} else if (prop == UFBX_Lcl_Scaling) {
+						track = &anim_nodes[target->typed_id].scale;
+					}
+
+					if (track) {
+						double min_time = DBL_MAX;
+						double max_time = -DBL_MAX;
+						for (ufbx_anim_curve *curve : fbx_anim_prop.anim_value->curves) {
+							if (!curve || curve->keyframes.count == 0) {
+								continue;
+							}
+
+							min_time = MIN(min_time, curve->keyframes[0].time);
+							max_time = MAX(max_time, curve->keyframes[curve->keyframes.count - 1].time);
+						}
+
+						track->min_time = MIN(track->min_time, min_time);
+						track->max_time = MAX(track->max_time, max_time);
+					}
+				}
 			}
+		}
 
-			ERR_FAIL_COND_V(!c.has("sampler"), ERR_PARSE_ERROR);
-			const int sampler = c["sampler"];
-			ERR_FAIL_INDEX_V(sampler, samplers.size(), ERR_PARSE_ERROR);
+		const ufbx_anim *fbx_anim = &fbx_scene->anim;
 
-			FBXNodeIndex node = t["node"];
-			String path = t["path"];
-
-			ERR_FAIL_INDEX_V(node, p_state->nodes.size(), ERR_PARSE_ERROR);
+		// TODO: Could do more sophisticated detection here..
+		for (const KeyValue<FBXNodeIndex, AnimNode> &pair : anim_nodes) {
+			const FBXNodeIndex node = pair.key;
+			const AnimNode &anim_node = pair.value;
+			const ufbx_node *fbx_node = fbx_scene->nodes[pair.key];
 
 			FBXAnimation::Track *track = nullptr;
-
 			if (!animation->get_tracks().has(node)) {
 				animation->get_tracks()[node] = FBXAnimation::Track();
 			}
 
 			track = &animation->get_tracks()[node];
 
-			const Dictionary &s = samplers[sampler];
+			const uint32_t max_keyframes = 4096; // TEMP
 
-			ERR_FAIL_COND_V(!s.has("input"), ERR_PARSE_ERROR);
-			ERR_FAIL_COND_V(!s.has("output"), ERR_PARSE_ERROR);
-
-			const int input = s["input"];
-			const int output = s["output"];
-
-			FBXAnimation::Interpolation interp = FBXAnimation::INTERP_LINEAR;
-			int output_count = 1;
-			if (s.has("interpolation")) {
-				const String &in = s["interpolation"];
-				if (in == "STEP") {
-					interp = FBXAnimation::INTERP_STEP;
-				} else if (in == "LINEAR") {
-					interp = FBXAnimation::INTERP_LINEAR;
-				} else if (in == "CATMULLROMSPLINE") {
-					interp = FBXAnimation::INTERP_CATMULLROMSPLINE;
-					output_count = 3;
-				} else if (in == "CUBICSPLINE") {
-					interp = FBXAnimation::INTERP_CUBIC_SPLINE;
-					output_count = 3;
+			if (anim_node.translation.is_valid()) {
+				double duration = anim_node.translation.max_time - anim_node.translation.min_time;
+				uint32_t min_steps = anim_node.translation.max_time > anim_node.translation.min_time;
+				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
+				for (uint32_t i = 0; i < steps; i++) {
+					double t = anim_node.translation.min_time + duration * i / steps;
+					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
+					track->position_track.times.push_back(float(t));
+					track->position_track.values.push_back(_as_vec3(transform.translation));
+					track->position_track.interpolation = FBXAnimation::INTERP_LINEAR;
 				}
 			}
 
-			const Vector<float> times = _decode_accessor_as_floats(p_state, input, false);
-			if (path == "translation") {
-				const Vector<Vector3> positions = _decode_accessor_as_vec3(p_state, output, false);
-				track->position_track.interpolation = interp;
-				track->position_track.times = Variant(times); //convert via variant
-				track->position_track.values = Variant(positions); //convert via variant
-			} else if (path == "rotation") {
-				const Vector<Quaternion> rotations = _decode_accessor_as_quaternion(p_state, output, false);
-				track->rotation_track.interpolation = interp;
-				track->rotation_track.times = Variant(times); //convert via variant
-				track->rotation_track.values = rotations;
-			} else if (path == "scale") {
-				const Vector<Vector3> scales = _decode_accessor_as_vec3(p_state, output, false);
-				track->scale_track.interpolation = interp;
-				track->scale_track.times = Variant(times); //convert via variant
-				track->scale_track.values = Variant(scales); //convert via variant
-			} else if (path == "weights") {
-				const Vector<float> weights = _decode_accessor_as_floats(p_state, output, false);
-
-				ERR_FAIL_INDEX_V(p_state->nodes[node]->mesh, p_state->meshes.size(), ERR_PARSE_ERROR);
-				Ref<FBXMesh> mesh = p_state->meshes[p_state->nodes[node]->mesh];
-				ERR_CONTINUE(!mesh->get_blend_weights().size());
-				const int wc = mesh->get_blend_weights().size();
-
-				track->weight_tracks.resize(wc);
-
-				const int expected_value_count = times.size() * output_count * wc;
-				ERR_CONTINUE_MSG(weights.size() != expected_value_count, "Invalid weight data, expected " + itos(expected_value_count) + " weight values, got " + itos(weights.size()) + " instead.");
-
-				const int wlen = weights.size() / wc;
-				for (int k = 0; k < wc; k++) { //separate tracks, having them together is not such a good idea
-					FBXAnimation::Channel<real_t> cf;
-					cf.interpolation = interp;
-					cf.times = Variant(times);
-					Vector<real_t> wdata;
-					wdata.resize(wlen);
-					for (int l = 0; l < wlen; l++) {
-						wdata.write[l] = weights[l * wc + k];
-					}
-
-					cf.values = wdata;
-					track->weight_tracks.write[k] = cf;
+			if (anim_node.rotation.is_valid()) {
+				double duration = anim_node.rotation.max_time - anim_node.rotation.min_time;
+				uint32_t min_steps = anim_node.rotation.max_time > anim_node.rotation.min_time;
+				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
+				for (uint32_t i = 0; i < steps; i++) {
+					double t = anim_node.rotation.min_time + duration * i / steps;
+					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
+					track->rotation_track.times.push_back(float(t));
+					track->rotation_track.values.push_back(_as_quaternion(transform.rotation));
+					track->rotation_track.interpolation = FBXAnimation::INTERP_LINEAR;
 				}
-			} else {
-				WARN_PRINT("Invalid path '" + path + "'.");
+			}
+
+			if (anim_node.scale.is_valid()) {
+				double duration = anim_node.scale.max_time - anim_node.scale.min_time;
+				uint32_t min_steps = anim_node.scale.max_time > anim_node.scale.min_time;
+				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
+				for (uint32_t i = 0; i < steps; i++) {
+					double t = anim_node.scale.min_time + duration * i / steps;
+					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
+					track->scale_track.times.push_back(float(t));
+					track->scale_track.values.push_back(_as_vec3(transform.scale));
+					track->scale_track.interpolation = FBXAnimation::INTERP_LINEAR;
+				}
 			}
 		}
 
 		p_state->animations.push_back(animation);
 	}
 
-	print_verbose("glTF: Total animations '" + itos(p_state->animations.size()) + "'.");
+	print_verbose("FBX: Total animations '" + itos(p_state->animations.size()) + "'.");
 
 	return OK;
 }
@@ -4248,15 +3554,6 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 		// and attach it to the bone_attachment
 		p_scene_parent = bone_attachment;
 	}
-	// Check if any FBXDocumentExtension classes want to generate a node for us.
-	for (Ref<FBXDocumentExtension> ext : document_extensions) {
-		ERR_CONTINUE(ext.is_null());
-		current_node = ext->generate_scene_node(p_state, fbx_node, p_scene_parent);
-		if (current_node) {
-			break;
-		}
-	}
-	// If none of our FBXDocumentExtension classes generated us a node, we generate one.
 	if (!current_node) {
 		if (fbx_node->skin >= 0 && fbx_node->mesh >= 0 && !fbx_node->children.is_empty()) {
 			current_node = _generate_spatial(p_state, p_node_index);
@@ -4272,6 +3569,9 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 			current_node = _generate_spatial(p_state, p_node_index);
 		}
 	}
+
+	ERR_FAIL_COND(!current_node);
+
 	// Add the node we generated and set the owner to the scene root.
 	p_scene_parent->add_child(current_node, true);
 	if (current_node != p_scene_root) {
@@ -5444,6 +4744,14 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	}
 
 	ufbx_load_opts opts = {};
+	opts.allow_null_material = true;
+	opts.target_axes = ufbx_axes_right_handed_y_up;
+	opts.target_unit_meters = 1.0f;
+	opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
+	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
+	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
+	opts.target_light_axes = ufbx_axes_right_handed_y_up;
+
 	ufbx_error error;
 
 	ufbx_stream file_stream = {};
@@ -5472,42 +4780,8 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	}
 	ERR_FAIL_NULL_V(scene, err);
 
-	// p_file->seek(0);
-	// uint32_t magic = p_file->get_32();
-	// if (magic == 0x46546C67) {
-	// 	//binary file
-	// 	//text file
-	// 	p_file->seek(0);
-	// 	err = _parse_glb(p_file, p_state);
-	// 	if (err != OK) {
-	// 		return err;
-	// 	}
-	// } else {
-	// 	p_file->seek(0);
-	// 	String text = p_file->get_as_utf8_string();
-	// 	JSON json;
-	// 	err = json.parse(text);
-	// 	if (err != OK) {
-	// 		_err_print_error("", "", json.get_error_line(), json.get_error_message().utf8().get_data(), false, ERR_HANDLER_SCRIPT);
-	// 	}
-	// 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-	// 	p_state->json = json.get_data();
-	// }
-
-	// err = _parse_asset_header(p_state);
-	// ERR_FAIL_COND_V(err != OK, err);
-
-	// document_extensions.clear();
-	// for (Ref<FBXDocumentExtension> ext : all_document_extensions) {
-	// 	ERR_CONTINUE(ext.is_null());
-	// 	err = ext->import_preflight(p_state, p_state->json["extensionsUsed"]);
-	// 	if (err == OK) {
-	// 		document_extensions.push_back(ext);
-	// 	}
-	// }
-
-	// err = _parse_fbx_state(p_state, p_path);
-	// ERR_FAIL_COND_V(err != OK, err);
+	err = _parse_fbx_state(p_state, p_path);
+	ERR_FAIL_COND_V(err != OK, err);
 
 	return OK;
 }
@@ -5565,9 +4839,9 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 	ERR_FAIL_NULL_V(p_state, nullptr);
 	ERR_FAIL_INDEX_V(0, p_state->root_nodes.size(), nullptr);
 	Error err = OK;
-	FBXNodeIndex gltf_root = p_state->root_nodes.write[0];
-	Node *gltf_root_node = p_state->get_scene_node(gltf_root);
-	Node *root = gltf_root_node->get_parent();
+	FBXNodeIndex fbx_root = p_state->root_nodes.write[0];
+	Node *fbx_root_node = p_state->get_scene_node(fbx_root);
+	Node *root = fbx_root_node->get_parent();
 	ERR_FAIL_NULL_V(root, nullptr);
 	_process_mesh_instances(p_state, root);
 	if (p_state->get_create_animations() && p_state->animations.size()) {
@@ -5577,25 +4851,6 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 		for (int i = 0; i < p_state->animations.size(); i++) {
 			_import_animation(p_state, ap, i, p_bake_fps, p_trimming, p_remove_immutable_tracks);
 		}
-	}
-	for (KeyValue<FBXNodeIndex, Node *> E : p_state->scene_nodes) {
-		ERR_CONTINUE(!E.value);
-		for (Ref<FBXDocumentExtension> ext : document_extensions) {
-			ERR_CONTINUE(ext.is_null());
-			ERR_CONTINUE(!p_state->json.has("nodes"));
-			Array nodes = p_state->json["nodes"];
-			ERR_CONTINUE(E.key >= nodes.size());
-			ERR_CONTINUE(E.key < 0);
-			Dictionary node_json = nodes[E.key];
-			Ref<FBXNode> fbx_node = p_state->nodes[E.key];
-			err = ext->import_node(p_state, fbx_node, node_json, E.value);
-			ERR_CONTINUE(err != OK);
-		}
-	}
-	for (Ref<FBXDocumentExtension> ext : document_extensions) {
-		ERR_CONTINUE(ext.is_null());
-		err = ext->import_post(p_state, root);
-		ERR_CONTINUE(err != OK);
 	}
 	ERR_FAIL_NULL_V(root, nullptr);
 	return root;
@@ -5647,10 +4902,6 @@ Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_pat
 Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_search_path) {
 	Error err;
 
-	/* PARSE EXTENSIONS */
-	err = _parse_fbx_extensions(p_state);
-	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
 	/* PARSE SCENE */
 	err = _parse_scenes(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
@@ -5659,38 +4910,13 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 	err = _parse_nodes(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
-	/* PARSE BUFFERS */
-	err = _parse_buffers(p_state, p_search_path);
-
-	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
-	/* PARSE BUFFER VIEWS */
-	err = _parse_buffer_views(p_state);
-
-	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
-	/* PARSE ACCESSORS */
-	err = _parse_accessors(p_state);
-
-	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
 	if (!p_state->discard_meshes_and_materials) {
 		/* PARSE IMAGES */
 		err = _parse_images(p_state, p_search_path);
 
 		ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
-		/* PARSE TEXTURE SAMPLERS */
-		err = _parse_texture_samplers(p_state);
-
-		ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
-		/* PARSE TEXTURES */
-		err = _parse_textures(p_state);
-
-		ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
-		/* PARSE TEXTURES */
+		/* PARSE MATERIALS */
 		err = _parse_materials(p_state);
 
 		ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
@@ -5698,7 +4924,6 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 
 	/* PARSE SKINS */
 	err = _parse_skins(p_state);
-
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
 	/* DETERMINE SKELETONS */
@@ -5764,35 +4989,3 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	return OK;
 }
 
-Error FBXDocument::_parse_fbx_extensions(Ref<FBXState> p_state) {
-	ERR_FAIL_NULL_V(p_state, ERR_PARSE_ERROR);
-	if (p_state->json.has("extensionsUsed")) {
-		Vector<String> ext_array = p_state->json["extensionsUsed"];
-		p_state->extensions_used = ext_array;
-	}
-	if (p_state->json.has("extensionsRequired")) {
-		Vector<String> ext_array = p_state->json["extensionsRequired"];
-		p_state->extensions_required = ext_array;
-	}
-	HashSet<String> supported_extensions;
-	supported_extensions.insert("KHR_lights_punctual");
-	supported_extensions.insert("KHR_materials_pbrSpecularGlossiness");
-	supported_extensions.insert("KHR_texture_transform");
-	supported_extensions.insert("KHR_materials_unlit");
-	supported_extensions.insert("KHR_materials_emissive_strength");
-	for (Ref<FBXDocumentExtension> ext : document_extensions) {
-		ERR_CONTINUE(ext.is_null());
-		Vector<String> ext_supported_extensions = ext->get_supported_extensions();
-		for (int i = 0; i < ext_supported_extensions.size(); ++i) {
-			supported_extensions.insert(ext_supported_extensions[i]);
-		}
-	}
-	Error ret = OK;
-	for (int i = 0; i < p_state->extensions_required.size(); i++) {
-		if (!supported_extensions.has(p_state->extensions_required[i])) {
-			ERR_PRINT("GLTF: Can't import file '" + p_state->filename + "', required extension '" + String(p_state->extensions_required[i]) + "' is not supported. Are you missing a FBXDocumentExtension plugin?");
-			ret = ERR_UNAVAILABLE;
-		}
-	}
-	return ret;
-}
