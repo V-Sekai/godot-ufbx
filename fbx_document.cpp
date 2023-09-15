@@ -136,9 +136,9 @@ static Vector3 _as_vec3(const ufbx_vec3 &p_vector) {
 	return Vector3(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z));
 }
 
-static Vector4 _as_vec4(const ufbx_vec4 &p_vector) {
-	return Vector4(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z), real_t(p_vector.w));
-}
+// static Vector4 _as_vec4(const ufbx_vec4 &p_vector) {
+// 	return Vector4(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z), real_t(p_vector.w));
+// }
 
 static Transform3D _as_xform(const ufbx_matrix &p_mat) {
 	Transform3D xform;
@@ -302,27 +302,27 @@ Error FBXDocument::_parse_glb(Ref<FileAccess> p_file, Ref<FBXState> p_state) {
 	return OK;
 }
 
-static Vector3 _arr_to_vec3(const Array &p_array) {
-	ERR_FAIL_COND_V(p_array.size() != 3, Vector3());
-	return Vector3(p_array[0], p_array[1], p_array[2]);
-}
+// static Vector3 _arr_to_vec3(const Array &p_array) {
+// 	ERR_FAIL_COND_V(p_array.size() != 3, Vector3());
+// 	return Vector3(p_array[0], p_array[1], p_array[2]);
+// }
 
-static Quaternion _arr_to_quaternion(const Array &p_array) {
-	ERR_FAIL_COND_V(p_array.size() != 4, Quaternion());
-	return Quaternion(p_array[0], p_array[1], p_array[2], p_array[3]);
-}
+// static Quaternion _arr_to_quaternion(const Array &p_array) {
+// 	ERR_FAIL_COND_V(p_array.size() != 4, Quaternion());
+// 	return Quaternion(p_array[0], p_array[1], p_array[2], p_array[3]);
+// }
 
-static Transform3D _arr_to_xform(const Array &p_array) {
-	ERR_FAIL_COND_V(p_array.size() != 16, Transform3D());
+// static Transform3D _arr_to_xform(const Array &p_array) {
+// 	ERR_FAIL_COND_V(p_array.size() != 16, Transform3D());
 
-	Transform3D xform;
-	xform.basis.set_column(Vector3::AXIS_X, Vector3(p_array[0], p_array[1], p_array[2]));
-	xform.basis.set_column(Vector3::AXIS_Y, Vector3(p_array[4], p_array[5], p_array[6]));
-	xform.basis.set_column(Vector3::AXIS_Z, Vector3(p_array[8], p_array[9], p_array[10]));
-	xform.set_origin(Vector3(p_array[12], p_array[13], p_array[14]));
+// 	Transform3D xform;
+// 	xform.basis.set_column(Vector3::AXIS_X, Vector3(p_array[0], p_array[1], p_array[2]));
+// 	xform.basis.set_column(Vector3::AXIS_Y, Vector3(p_array[4], p_array[5], p_array[6]));
+// 	xform.basis.set_column(Vector3::AXIS_Z, Vector3(p_array[8], p_array[9], p_array[10]));
+// 	xform.set_origin(Vector3(p_array[12], p_array[13], p_array[14]));
 
-	return xform;
-}
+// 	return xform;
+// }
 
 String FBXDocument::_gen_unique_name(Ref<FBXState> p_state, const String &p_name) {
 	const String s_name = p_name.validate_node_name();
@@ -474,24 +474,24 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 	return OK;
 }
 
-static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
-	int start = p_uri.find(",");
-	ERR_FAIL_COND_V(start == -1, Vector<uint8_t>());
+// static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
+// 	int start = p_uri.find(",");
+// 	ERR_FAIL_COND_V(start == -1, Vector<uint8_t>());
 
-	CharString substr = p_uri.substr(start + 1).ascii();
+// 	CharString substr = p_uri.substr(start + 1).ascii();
 
-	int strlen = substr.length();
+// 	int strlen = substr.length();
 
-	Vector<uint8_t> buf;
-	buf.resize(strlen / 4 * 3 + 1 + 1);
+// 	Vector<uint8_t> buf;
+// 	buf.resize(strlen / 4 * 3 + 1 + 1);
 
-	size_t len = 0;
-	ERR_FAIL_COND_V(CryptoCore::b64_decode(buf.ptrw(), buf.size(), &len, (unsigned char *)substr.get_data(), strlen) != OK, Vector<uint8_t>());
+// 	size_t len = 0;
+// 	ERR_FAIL_COND_V(CryptoCore::b64_decode(buf.ptrw(), buf.size(), &len, (unsigned char *)substr.get_data(), strlen) != OK, Vector<uint8_t>());
 
-	buf.resize(len);
+// 	buf.resize(len);
 
-	return buf;
-}
+// 	return buf;
+// }
 
 Error FBXDocument::_encode_accessors(Ref<FBXState> p_state) {
 	Array accessors;
@@ -1535,10 +1535,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 		Vector<float> blend_weights;
 		for (const ufbx_mesh_material &fbx_mesh_mat : fbx_mesh->materials) {
 			for (Mesh::PrimitiveType primitive : primitive_types) {
-
 				uint32_t num_indices = 0;
-				uint32_t min_face_indices = 0;
-				uint32_t max_face_indices = 0;
 				switch (primitive) {
 					case Mesh::PRIMITIVE_POINTS:
 						num_indices = fbx_mesh_mat.num_point_faces * 1;
@@ -1548,6 +1545,15 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 						break;
 					case Mesh::PRIMITIVE_TRIANGLES:
 						num_indices = fbx_mesh_mat.num_triangles * 3;
+						break;
+					case Mesh::PRIMITIVE_TRIANGLE_STRIP:
+						// FIXME 2021-09-15 fire
+						break;
+					case Mesh::PRIMITIVE_LINE_STRIP:
+						// FIXME 2021-09-15 fire
+						break;
+					default:
+						// FIXME 2021-09-15 fire
 						break;
 				}
 				if (num_indices == 0) {
@@ -1586,6 +1592,15 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 									SWAP(dst[i * 3 + 0], dst[i * 3 + 2]);
 								}
 							}
+							break;
+						case Mesh::PRIMITIVE_TRIANGLE_STRIP:
+							// FIXME 2021-09-15 fire
+							break;
+						case Mesh::PRIMITIVE_LINE_STRIP:
+							// FIXME 2021-09-15 fire
+							break;
+						default:
+							// FIXME 2021-09-15 fire
 							break;
 					}
 				}
@@ -1715,8 +1730,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					array[Mesh::ARRAY_WEIGHTS] = weights;
 				}
 
-				bool generate_tangents = (primitive == Mesh::PRIMITIVE_TRIANGLES
-					&& !array[Mesh::ARRAY_TANGENT] && array[Mesh::ARRAY_TEX_UV] && array[Mesh::ARRAY_NORMAL]);
+				bool generate_tangents = (primitive == Mesh::PRIMITIVE_TRIANGLES && !array[Mesh::ARRAY_TANGENT] && array[Mesh::ARRAY_TEX_UV] && array[Mesh::ARRAY_NORMAL]);
 
 				Ref<SurfaceTool> mesh_surface_tool;
 				mesh_surface_tool.instantiate();
@@ -1769,12 +1783,10 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 								const int size = src_varr.size();
 								ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
 								{
-									const int max_idx = varr.size();
 									varr.resize(size);
 
 									Vector3 *w_varr = varr.ptrw();
 									const Vector3 *r_varr = varr.ptr();
-									const Vector3 *r_src_varr = src_varr.ptr();
 									for (int l = 0; l < size; l++) {
 										int32_t vertex_index = fbx_mesh->vertex_indices[uint32_t(indices[l])];
 										Vector3 offset = _as_vec3(ufbx_get_blend_shape_vertex_offset(fbx_shape, vertex_index));
@@ -1975,7 +1987,7 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 	for (int i = 0; i < fbx_scene->texture_files.count; i++) {
 		const ufbx_texture_file &fbx_texture_file = fbx_scene->texture_files[i];
-		String path =_as_string(fbx_texture_file.filename);
+		String path = _as_string(fbx_texture_file.filename);
 
 		Vector<uint8_t> data;
 		if (fbx_texture_file.content.size > 0 && fbx_texture_file.content.size <= INT_MAX) {
@@ -2423,7 +2435,6 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 
 	// Create the base skins, and mark nodes that are joints
 	for (const ufbx_skin_deformer *fbx_skin : fbx_scene->skin_deformers) {
-
 		Ref<FBXSkin> skin;
 		skin.instantiate();
 
@@ -4838,7 +4849,6 @@ void FBXDocument::unregister_all_fbx_document_extensions() {
 Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool p_trimming, bool p_remove_immutable_tracks) {
 	ERR_FAIL_NULL_V(p_state, nullptr);
 	ERR_FAIL_INDEX_V(0, p_state->root_nodes.size(), nullptr);
-	Error err = OK;
 	FBXNodeIndex fbx_root = p_state->root_nodes.write[0];
 	Node *fbx_root_node = p_state->get_scene_node(fbx_root);
 	Node *root = fbx_root_node->get_parent();
@@ -4988,4 +4998,3 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 	}
 	return OK;
 }
-
