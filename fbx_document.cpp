@@ -1789,8 +1789,8 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 									const Vector3 *r_varr = varr.ptr();
 									for (int l = 0; l < size; l++) {
 										int32_t vertex_index = fbx_mesh->vertex_indices[uint32_t(indices[l])];
-										Vector3 offset = _as_vec3(ufbx_get_blend_shape_vertex_offset(fbx_shape, vertex_index));
-										w_varr[l] = r_varr[l] + offset;
+										Vector3 blender_shape_offset = _as_vec3(ufbx_get_blend_shape_vertex_offset(fbx_shape, vertex_index));
+										w_varr[l] = r_varr[l] + blender_shape_offset;
 									}
 								}
 								array_copy[Mesh::ARRAY_VERTEX] = varr;
