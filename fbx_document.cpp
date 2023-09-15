@@ -425,7 +425,7 @@ Error FBXDocument::_parse_scenes(Ref<FBXState> p_state) {
 Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 
-	for (int node_i = 0; node_i < fbx_scene->nodes.count; node_i++) {
+	for (int node_i = 0; node_i < static_cast<int>(fbx_scene->nodes.count); node_i++) {
 		const ufbx_node *fbx_node = fbx_scene->nodes[node_i];
 
 		Ref<FBXNode> node;
@@ -1634,11 +1634,11 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 					int texcoord_i = 2 + 2 * custom_i;
 					int num_channels = 0;
-					if (texcoord_i < fbx_mesh->uv_sets.count && fbx_mesh->uv_sets[texcoord_i].vertex_uv.exists) {
+					if (texcoord_i < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_i].vertex_uv.exists) {
 						texcoord_first = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i].vertex_uv, indices);
 						num_channels = 2;
 					}
-					if (texcoord_i + 1 < fbx_mesh->uv_sets.count && fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv.exists) {
+					if (texcoord_i + 1 < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv.exists) {
 						texcoord_second = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv, indices);
 						num_channels = 4;
 					}
@@ -1985,7 +1985,7 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 	ERR_FAIL_NULL_V(p_state, ERR_INVALID_PARAMETER);
 
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (int texture_i = 0; texture_i < fbx_scene->texture_files.count; texture_i++) {
+	for (int texture_i = 0; texture_i < static_cast<int>(fbx_scene->texture_files.count); texture_i++) {
 		const ufbx_texture_file &fbx_texture_file = fbx_scene->texture_files[texture_i];
 		String path = _as_string(fbx_texture_file.filename);
 
@@ -2019,7 +2019,7 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 	}
 
 	// Create a texture for each file texture.
-	for (int texture_file_i = 0; texture_file_i < fbx_scene->texture_files.count; texture_file_i++) {
+	for (int texture_file_i = 0; texture_file_i < static_cast<int>(fbx_scene->texture_files.count); texture_file_i++) {
 		Ref<FBXTexture> texture;
 		texture.instantiate();
 		texture->set_src_image(FBXImageIndex(texture_file_i));
@@ -2100,7 +2100,7 @@ Ref<FBXTextureSampler> FBXDocument::_get_sampler_for_texture(Ref<FBXState> p_sta
 
 Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXMaterialIndex material_i = 0; material_i < fbx_scene->materials.count; material_i++) {
+	for (FBXMaterialIndex material_i = 0; material_i < static_cast<FBXMaterialIndex>(fbx_scene->materials.count); material_i++) {
 		const ufbx_material *fbx_material = fbx_scene->materials[material_i];
 
 		Ref<StandardMaterial3D> material;
@@ -2439,7 +2439,7 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 		skin.instantiate();
 
 		skin->inverse_binds.resize(fbx_skin->clusters.count);
-		for (int skin_i = 0; skin_i < fbx_skin->clusters.count; skin_i++) {
+		for (int skin_i = 0; skin_i < static_cast<int>(fbx_skin->clusters.count); skin_i++) {
 			const ufbx_skin_cluster *fbx_cluster = fbx_skin->clusters[skin_i];
 			skin->inverse_binds.write[skin_i] = _as_xform(fbx_cluster->geometry_to_bone);
 			const FBXNodeIndex node = fbx_cluster->bone_node->typed_id;
@@ -2899,7 +2899,7 @@ void FBXDocument::_remove_duplicate_skins(Ref<FBXState> p_state) {
 
 Error FBXDocument::_parse_cameras(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXCameraIndex camera_i = 0; camera_i < fbx_scene->cameras.count; camera_i++) {
+	for (FBXCameraIndex camera_i = 0; camera_i < static_cast<FBXCameraIndex>(fbx_scene->cameras.count); camera_i++) {
 		const ufbx_camera *fbx_camera = fbx_scene->cameras[camera_i];
 
 		Ref<FBXCamera> camera;
@@ -2943,7 +2943,7 @@ String FBXDocument::interpolation_to_string(const FBXAnimation::Interpolation p_
 
 Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXAnimationIndex animation_i = 0; animation_i < fbx_scene->anim_stacks.count; animation_i++) {
+	for (FBXAnimationIndex animation_i = 0; animation_i < static_cast<FBXAnimationIndex>(fbx_scene->anim_stacks.count); animation_i++) {
 		const ufbx_anim_stack *fbx_anim_stack = fbx_scene->anim_stacks[animation_i];
 
 		Ref<FBXAnimation> animation;
