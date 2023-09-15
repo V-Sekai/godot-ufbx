@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_document.cpp                                                     */
+/*  fbx_document.cpp                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -79,12 +79,12 @@
 #include <limits>
 
 static size_t _file_access_read_fn(void *user, void *data, size_t size) {
-	FileAccess *file = static_cast<FileAccess*>(user);
-	return (size_t)file->get_buffer((uint8_t*)data, (uint64_t)size);
+	FileAccess *file = static_cast<FileAccess *>(user);
+	return (size_t)file->get_buffer((uint8_t *)data, (uint64_t)size);
 }
 
 static bool _file_access_skip_fn(void *user, size_t size) {
-	FileAccess *file = static_cast<FileAccess*>(user);
+	FileAccess *file = static_cast<FileAccess *>(user);
 	file->seek(file->get_position() + size);
 	return true;
 }
@@ -5469,7 +5469,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 		if (node->mesh) {
 			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
 		}
-	}	
+	}
 	ERR_FAIL_NULL_V(scene, err);
 
 	// p_file->seek(0);

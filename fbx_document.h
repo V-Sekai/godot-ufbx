@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  gltf_document.h                                                       */
+/*  fbx_document.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -252,6 +252,7 @@ private:
 			Ref<Animation> p_animation,
 			int32_t p_track_i,
 			FBXNodeIndex p_node_i);
+
 public:
 	// https://www.itu.int/rec/R-REC-BT.601
 	// https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.601-7-201103-I!!PDF-E.pdf

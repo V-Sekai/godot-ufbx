@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  fbx_node.cpp                                                         */
+/*  fbx_node.cpp                                                          */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -156,7 +156,6 @@ Vector<int> FBXNode::get_children() {
 void FBXNode::set_children(Vector<int> p_children) {
 	children = p_children;
 }
-
 
 Variant FBXNode::get_additional_data(const StringName &p_extension_name) {
 	return additional_data[p_extension_name];
