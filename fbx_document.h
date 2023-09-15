@@ -103,19 +103,7 @@ private:
 			const FBXTextureIndex p_texture);
 	Error _parse_json(const String &p_path, Ref<FBXState> p_state);
 	Error _parse_glb(Ref<FileAccess> p_file, Ref<FBXState> p_state);
-	void _compute_node_heights(Ref<FBXState> p_state);
-	Error _parse_buffers(Ref<FBXState> p_state, const String &p_base_path);
-	Error _parse_buffer_views(Ref<FBXState> p_state);
 	FBXType _get_type_from_str(const String &p_string);
-	Error _parse_accessors(Ref<FBXState> p_state);
-	Error _decode_buffer_view(Ref<FBXState> p_state, double *p_dst,
-			const FBXBufferViewIndex p_buffer_view,
-			const int p_skip_every, const int p_skip_bytes,
-			const int p_element_size, const int p_count,
-			const FBXType p_type, const int p_component_count,
-			const int p_component_type, const int p_component_size,
-			const bool p_normalized, const int p_byte_offset,
-			const bool p_for_vertex);
 	Vector<double> _decode_accessor(Ref<FBXState> p_state,
 			const FBXAccessorIndex p_accessor,
 			const bool p_for_vertex);
@@ -147,17 +135,10 @@ private:
 			const FBXAccessorIndex p_accessor,
 			const bool p_for_vertex);
 	Error _parse_meshes(Ref<FBXState> p_state);
-	Ref<Image> _parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_mime_type, int p_index, String &r_file_extension);
+	Ref<Image> _parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_filename, int p_index);
 	void _parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image);
 	Error _parse_images(Ref<FBXState> p_state, const String &p_base_path);
-	Error _parse_textures(Ref<FBXState> p_state);
-	Error _parse_texture_samplers(Ref<FBXState> p_state);
 	Error _parse_materials(Ref<FBXState> p_state);
-	void _set_texture_transform_uv1(const Dictionary &d, Ref<BaseMaterial3D> p_material);
-	static void spec_gloss_to_metal_base_color(const Color &p_specular_factor,
-			const Color &p_diffuse,
-			Color &r_base_color,
-			float &r_metallic);
 	FBXNodeIndex _find_highest_node(Ref<FBXState> p_state,
 			const Vector<FBXNodeIndex> &p_subset);
 	void _recurse_children(Ref<FBXState> p_state, const FBXNodeIndex p_node_index,
@@ -279,7 +260,6 @@ public:
 
 public:
 	Error _parse_fbx_state(Ref<FBXState> p_state, const String &p_search_path);
-	Error _parse_fbx_extensions(Ref<FBXState> p_state);
 	void _process_mesh_instances(Ref<FBXState> p_state, Node *p_scene_root);
 	void _generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root);
 	void _generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root);
