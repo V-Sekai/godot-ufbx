@@ -56,6 +56,7 @@
 #include "scene/resources/surface_tool.h"
 
 #include "modules/modules_enabled.gen.h" // For csg, gridmap.
+#include <_types/_uint64_t.h>
 
 #ifdef TOOLS_ENABLED
 #include "editor/editor_file_system.h"
@@ -425,8 +426,8 @@ Error FBXDocument::_parse_scenes(Ref<FBXState> p_state) {
 Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 
-	for (int i = 0; i < fbx_scene->nodes.count; i++) {
-		const ufbx_node *fbx_node = fbx_scene->nodes[i];
+	for (int node_i = 0; node_i < fbx_scene->nodes.count; node_i++) {
+		const ufbx_node *fbx_node = fbx_scene->nodes[node_i];
 
 		Ref<FBXNode> node;
 		node.instantiate();
@@ -1604,7 +1605,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 							break;
 					}
 				}
-				ERR_CONTINUE(offset != indices.size());
+				ERR_CONTINUE((uint64_t) offset != (uint64_t)indices.size());
 
 				int32_t vertex_num = indices.size();
 				bool has_vertex_color = false;
