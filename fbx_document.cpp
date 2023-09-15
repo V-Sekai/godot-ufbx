@@ -1985,8 +1985,8 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 	ERR_FAIL_NULL_V(p_state, ERR_INVALID_PARAMETER);
 
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (int i = 0; i < fbx_scene->texture_files.count; i++) {
-		const ufbx_texture_file &fbx_texture_file = fbx_scene->texture_files[i];
+	for (int texture_i = 0; texture_i < fbx_scene->texture_files.count; texture_i++) {
+		const ufbx_texture_file &fbx_texture_file = fbx_scene->texture_files[texture_i];
 		String path = _as_string(fbx_texture_file.filename);
 
 		Vector<uint8_t> data;
@@ -2004,7 +2004,7 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 			// spec's requirement that we honor mimetype regardless of file URI.
 			data = FileAccess::get_file_as_bytes(path);
 			if (data.size() == 0) {
-				WARN_PRINT(vformat("FBX: Image index '%d' couldn't be loaded from path: %s because there was no data to load. Skipping it.", i, path));
+				WARN_PRINT(vformat("FBX: Image index '%d' couldn't be loaded from path: %s because there was no data to load. Skipping it.", texture_i, path));
 				p_state->images.push_back(Ref<Texture2D>()); // Placeholder to keep count.
 				p_state->source_images.push_back(Ref<Image>());
 				continue;
@@ -2013,16 +2013,16 @@ Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_pat
 
 		// Parse the image data from bytes into an Image resource and save if needed.
 		String file_extension;
-		Ref<Image> img = _parse_image_bytes_into_image(p_state, data, path, i);
-		img->set_name(itos(i));
-		_parse_image_save_image(p_state, data, file_extension, i, img);
+		Ref<Image> img = _parse_image_bytes_into_image(p_state, data, path, texture_i);
+		img->set_name(itos(texture_i));
+		_parse_image_save_image(p_state, data, file_extension, texture_i, img);
 	}
 
-	// Create a texture for each file texture
-	for (int i = 0; i < fbx_scene->texture_files.count; i++) {
+	// Create a texture for each file texture.
+	for (int texture_file_i = 0; texture_file_i < fbx_scene->texture_files.count; texture_file_i++) {
 		Ref<FBXTexture> texture;
 		texture.instantiate();
-		texture->set_src_image(FBXImageIndex(i));
+		texture->set_src_image(FBXImageIndex(texture_file_i));
 		p_state->textures.push_back(texture);
 	}
 
@@ -2100,15 +2100,15 @@ Ref<FBXTextureSampler> FBXDocument::_get_sampler_for_texture(Ref<FBXState> p_sta
 
 Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXMaterialIndex i = 0; i < fbx_scene->materials.count; i++) {
-		const ufbx_material *fbx_material = fbx_scene->materials[i];
+	for (FBXMaterialIndex material_i = 0; material_i < fbx_scene->materials.count; material_i++) {
+		const ufbx_material *fbx_material = fbx_scene->materials[material_i];
 
 		Ref<StandardMaterial3D> material;
 		material.instantiate();
 		if (fbx_material->name.length > 0) {
 			material->set_name(_as_string(fbx_material->name));
 		} else {
-			material->set_name(vformat("material_%s", itos(i)));
+			material->set_name(vformat("material_%s", itos(material_i)));
 		}
 		material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
 		Dictionary material_extensions;
@@ -2439,9 +2439,9 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 		skin.instantiate();
 
 		skin->inverse_binds.resize(fbx_skin->clusters.count);
-		for (int i = 0; i < fbx_skin->clusters.count; i++) {
-			const ufbx_skin_cluster *fbx_cluster = fbx_skin->clusters[i];
-			skin->inverse_binds.write[i] = _as_xform(fbx_cluster->geometry_to_bone);
+		for (int skin_i = 0; skin_i < fbx_skin->clusters.count; skin_i++) {
+			const ufbx_skin_cluster *fbx_cluster = fbx_skin->clusters[skin_i];
+			skin->inverse_binds.write[skin_i] = _as_xform(fbx_cluster->geometry_to_bone);
 			const FBXNodeIndex node = fbx_cluster->bone_node->typed_id;
 
 			skin->joints.push_back(node);
@@ -2899,8 +2899,8 @@ void FBXDocument::_remove_duplicate_skins(Ref<FBXState> p_state) {
 
 Error FBXDocument::_parse_cameras(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXCameraIndex i = 0; i < fbx_scene->cameras.count; i++) {
-		const ufbx_camera *fbx_camera = fbx_scene->cameras[i];
+	for (FBXCameraIndex camera_i = 0; camera_i < fbx_scene->cameras.count; camera_i++) {
+		const ufbx_camera *fbx_camera = fbx_scene->cameras[camera_i];
 
 		Ref<FBXCamera> camera;
 		camera.instantiate();
@@ -2943,8 +2943,8 @@ String FBXDocument::interpolation_to_string(const FBXAnimation::Interpolation p_
 
 Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXAnimationIndex i = 0; i < fbx_scene->anim_stacks.count; i++) {
-		const ufbx_anim_stack *fbx_anim_stack = fbx_scene->anim_stacks[i];
+	for (FBXAnimationIndex animation_i = 0; animation_i < fbx_scene->anim_stacks.count; animation_i++) {
+		const ufbx_anim_stack *fbx_anim_stack = fbx_scene->anim_stacks[animation_i];
 
 		Ref<FBXAnimation> animation;
 		animation.instantiate();
