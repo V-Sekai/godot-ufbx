@@ -1604,7 +1604,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 							break;
 					}
 				}
-				ERR_CONTINUE((uint64_t) offset != (uint64_t)indices.size());
+				ERR_CONTINUE((uint64_t)offset != (uint64_t)indices.size());
 
 				int32_t vertex_num = indices.size();
 				bool has_vertex_color = false;
@@ -1622,11 +1622,25 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					array[Mesh::ARRAY_NORMAL] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_tangent, indices);
 				}
 				if (fbx_mesh->vertex_uv.exists) {
-					array[Mesh::ARRAY_TEX_UV] = _decode_vertex_attrib_vec2(fbx_mesh->vertex_uv, indices);
+					PackedVector2Array uv_array = _decode_vertex_attrib_vec2(fbx_mesh->vertex_uv, indices);
+					for (int uv_array_i = 0; uv_array_i < uv_array.size(); uv_array_i++) {
+						Vector2 uv = uv_array[uv_array_i];
+						uv.y = 1.0 - uv.y;
+						uv_array.set(uv_array_i, uv);
+					}
+					array[Mesh::ARRAY_TEX_UV] = uv_array;
 				}
+
 				if (fbx_mesh->uv_sets.count >= 2 && fbx_mesh->uv_sets[1].vertex_uv.exists) {
-					array[Mesh::ARRAY_TEX_UV2] = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[1].vertex_uv, indices);
+					PackedVector2Array uv2_array = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[1].vertex_uv, indices);
+					for (int uv2_i = 0; uv2_i < uv2_array.size(); uv2_i++) {
+						Vector2 uv = uv2_array[uv2_i];
+						uv.y = 1.0 - uv.y;
+						uv2_array.set(uv2_i, uv);
+					}
+					array[Mesh::ARRAY_TEX_UV2] = uv2_array;
 				}
+
 				for (int custom_i = 0; custom_i < 3; custom_i++) {
 					Vector<float> cur_custom;
 					Vector<Vector2> texcoord_first;
@@ -2130,7 +2144,6 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 			// TODO: Does not support rotation, could be inverted?
 			material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
 			Vector3 scale = _as_vec3(base_texture->uv_transform.scale);
-			scale.y = 1.0 - scale.y;
 			material->set_uv1_scale(scale);
 		}
 
