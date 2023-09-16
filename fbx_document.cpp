@@ -5018,6 +5018,9 @@ Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_pat
 Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_search_path) {
 	Error err;
 
+	// Abort parsing if the scene is not loaded.
+	ERR_FAIL_COND_V(p_state->scene.get() == nullptr, ERR_PARSE_ERROR);
+
 	/* PARSE SCENE */
 	err = _parse_scenes(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
