@@ -2130,7 +2130,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 			// TODO: Does not support rotation, could be inverted?
 			material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
 			Vector3 scale = _as_vec3(base_texture->uv_transform.scale);
-			scale.y *= -1;
+			scale.y = 1.0 - scale.y;
 			material->set_uv1_scale(scale);
 		}
 
