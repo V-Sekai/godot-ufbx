@@ -440,7 +440,11 @@ Error FBXDocument::_parse_scenes(Ref<FBXState> p_state) {
 
 	// TODO: Multi-document support, would need test files for structure
 	p_state->scene_name = "";
-	p_state->root_nodes.push_back(int(fbx_scene->root_node->typed_id));
+
+	// TODO: Append the root node directly if we use root-based space conversion
+	for (const ufbx_node *root_node : fbx_scene->root_node->children) {
+		p_state->root_nodes.push_back(int(root_node->typed_id));
+	}
 
 	return OK;
 }
