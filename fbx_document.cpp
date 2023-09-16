@@ -4927,6 +4927,29 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 	err = _parse_skins(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
+	const ufbx_scene *fbx_scene = p_state->scene.get();
+	if (!(fbx_scene->meshes.count)) {
+		for (FBXAnimationIndex animation_i = 0; animation_i < static_cast<FBXAnimationIndex>(fbx_scene->anim_stacks.count); animation_i++) {
+			const ufbx_anim_stack *fbx_anim_stack = fbx_scene->anim_stacks[animation_i];
+			for (const ufbx_anim_layer *fbx_anim_layer : fbx_anim_stack->layers) {
+				Ref<FBXSkin> skin;
+				skin.instantiate();
+				for (const ufbx_anim_prop &fbx_anim_prop : fbx_anim_layer->anim_props) {
+					const ufbx_element *target = fbx_anim_prop.element;
+
+					if (target->type == UFBX_ELEMENT_NODE) {
+						// Create a new skin and add the current node to the skin's joints
+
+						FBXNodeIndex nodeIndex = target->typed_id;
+						skin->joints.push_back(nodeIndex);
+						skin->joints_original.push_back(nodeIndex);
+					}
+				}
+				p_state->skins.push_back(skin);
+			}
+		}
+	}
+
 	/* DETERMINE SKELETONS */
 	err = _determine_skeletons(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
