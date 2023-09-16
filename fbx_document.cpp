@@ -3007,7 +3007,7 @@ Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 			}
 		}
 
-		const ufbx_anim *fbx_anim = &fbx_scene->anim;
+		const ufbx_anim *fbx_anim = &fbx_anim_stack->anim;
 
 		// TODO: Could do more sophisticated detection here..
 		for (const KeyValue<FBXNodeIndex, AnimNode> &pair : anim_nodes) {
