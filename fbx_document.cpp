@@ -4777,33 +4777,11 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
 
 	ufbx_error error;
-
 	ufbx_stream file_stream = {};
 	file_stream.read_fn = &_file_access_read_fn;
 	file_stream.skip_fn = &_file_access_skip_fn;
 	file_stream.user = p_file.ptr();
-
 	p_state->scene = ufbx_scene_ref(ufbx_load_stream(&file_stream, &opts, &error));
-
-	ufbx_scene *scene = p_state->scene.get();
-	if (!scene) {
-		ERR_PRINT(vformat("Failed to load: %s", error.description.data));
-		return FAILED;
-	}
-
-	for (size_t i = 0; i < scene->nodes.count; i++) {
-		ufbx_node *node = scene->nodes.data[i];
-		if (node->is_root) {
-			continue;
-		}
-
-		print_line(vformat("Object: %s", node->name.data));
-		if (node->mesh) {
-			print_line(vformat("-> mesh with %s faces", itos(node->mesh->faces.count)));
-		}
-	}
-	ERR_FAIL_NULL_V(scene, err);
-
 	err = _parse_fbx_state(p_state, p_path);
 	ERR_FAIL_COND_V(err != OK, err);
 
