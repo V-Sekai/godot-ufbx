@@ -4878,7 +4878,8 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 }
 
 Error FBXDocument::append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32_t p_flags) {
-	ERR_FAIL_COND_V(p_state.is_null(), FAILED);
+	ERR_FAIL_NULL_V(p_node, FAILED);	
+	ERR_FAIL_NULL_V(p_state, FAILED);
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
 	if (!p_state->buffers.size()) {
@@ -4900,7 +4901,8 @@ Error FBXDocument::append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32
 }
 
 Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_path, Ref<FBXState> p_state, uint32_t p_flags) {
-	ERR_FAIL_COND_V(p_state.is_null(), FAILED);
+	ERR_FAIL_NULL_V(p_state, FAILED);
+	ERR_FAIL_NULL_V(p_bytes.ptr(), ERR_INVALID_DATA);
 	// TODO Add missing texture and missing .bin file paths to r_missing_deps 2021-09-10 fire
 	Error err = FAILED;
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
