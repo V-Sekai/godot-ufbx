@@ -2470,6 +2470,27 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 		p_state->skins.push_back(skin);
 	}
 
+	// Mark all bones as joints to form skeletons.
+	for (const ufbx_bone *fbx_bone : fbx_scene->bones) {
+		for (const ufbx_node *fbx_node : fbx_bone->instances) {
+			const FBXNodeIndex node = fbx_node->typed_id;
+			if (!p_state->nodes.write[node]->joint) {
+				p_state->nodes.write[node]->joint = true;
+
+				// Mark root bones as virtual skins, we only need to mark the root node
+				// as `_expand_skin()` below will capture child bones.
+				if (!(fbx_node->parent && fbx_node->parent->attrib_type == UFBX_ELEMENT_BONE)) {
+					Ref<FBXSkin> skin;
+					skin.instantiate();
+					skin->joints.push_back(node);
+					skin->joints_original.push_back(node);
+					skin->set_name(vformat("skin_%s", itos(p_state->skins.size())));
+					p_state->skins.push_back(skin);
+				}
+			}
+		}
+	}
+
 	for (FBXSkinIndex i = 0; i < p_state->skins.size(); ++i) {
 		Ref<FBXSkin> skin = p_state->skins.write[i];
 
@@ -4857,7 +4878,8 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 }
 
 Error FBXDocument::append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32_t p_flags) {
-	ERR_FAIL_COND_V(p_state.is_null(), FAILED);
+	ERR_FAIL_NULL_V(p_node, FAILED);	
+	ERR_FAIL_NULL_V(p_state, FAILED);
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
 	if (!p_state->buffers.size()) {
@@ -4879,7 +4901,8 @@ Error FBXDocument::append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32
 }
 
 Error FBXDocument::append_from_buffer(PackedByteArray p_bytes, String p_base_path, Ref<FBXState> p_state, uint32_t p_flags) {
-	ERR_FAIL_COND_V(p_state.is_null(), FAILED);
+	ERR_FAIL_NULL_V(p_state, FAILED);
+	ERR_FAIL_NULL_V(p_bytes.ptr(), ERR_INVALID_DATA);
 	// TODO Add missing texture and missing .bin file paths to r_missing_deps 2021-09-10 fire
 	Error err = FAILED;
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
