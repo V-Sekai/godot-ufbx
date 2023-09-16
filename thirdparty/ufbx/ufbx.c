@@ -1,6 +1,9 @@
 #ifndef UFBX_UFBX_C_INCLUDED
 #define UFBX_UFBX_C_INCLUDED
 
+// TODO TEMP: We need to somehow override this
+#define UFBX_ENABLE_ERROR_STACK 1
+
 #if defined(UFBX_HEADER_PATH)
 	#include UFBX_HEADER_PATH
 #else

@@ -4895,6 +4895,13 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	file_stream.skip_fn = &_file_access_skip_fn;
 	file_stream.user = p_file.ptr();
 	p_state->scene = ufbx_scene_ref(ufbx_load_stream(&file_stream, &opts, &error));
+
+	if (!p_state->scene.get()) {
+		char err_buf[512];
+		ufbx_format_error(err_buf, sizeof(err_buf), &error);
+		ERR_FAIL_V_MSG(ERR_PARSE_ERROR, err_buf);
+	}
+
 	err = _parse_fbx_state(p_state, p_path);
 	ERR_FAIL_COND_V(err != OK, err);
 
