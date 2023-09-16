@@ -125,7 +125,7 @@ static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 }
 
 static String _as_string(const ufbx_string &p_string) {
-	return String(p_string.data);
+	return String::utf8(p_string.data, (int)p_string.length);
 }
 
 static Vector2 _as_vec2(const ufbx_vec2 &p_vector) {
