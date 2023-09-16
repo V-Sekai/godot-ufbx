@@ -4802,7 +4802,7 @@ void FBXDocument::_bind_methods() {
 			&FBXDocument::unregister_fbx_document_extension);
 }
 
-void FBXDocument::_build_parent_hierachy(Ref<FBXState> p_state) {
+void FBXDocument::_build_parent_hierarchy(Ref<FBXState> p_state) {
 	// build the hierarchy
 	for (FBXNodeIndex node_i = 0; node_i < p_state->nodes.size(); node_i++) {
 		for (int j = 0; j < p_state->nodes[node_i]->children.size(); j++) {
