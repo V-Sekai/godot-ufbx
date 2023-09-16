@@ -220,6 +220,21 @@ static Vector<Vector3> _decode_vertex_attrib_vec3(const ufbx_vertex_vec3 &p_attr
 	return ret;
 }
 
+static Vector<float> _decode_vertex_attrib_vec3_as_tangent(const ufbx_vertex_vec3 &p_attrib, const Vector<uint32_t> &p_indices) {
+	Vector<float> ret;
+
+	int num_indices = p_indices.size();
+	ret.resize(num_indices * 4);
+	for (int i = 0; i < num_indices; i++) {
+		Vector3 v = _as_vec3(p_attrib[p_indices[i]]);
+		ret.write[i * 4 + 0] = v.x;
+		ret.write[i * 4 + 1] = v.y;
+		ret.write[i * 4 + 2] = v.z;
+		ret.write[i * 4 + 3] = 1.0f;
+	}
+	return ret;
+}
+
 static Vector<Color> _decode_vertex_attrib_color(const ufbx_vertex_vec4 &p_attrib, const Vector<uint32_t> &p_indices) {
 	Vector<Color> ret;
 
@@ -229,6 +244,14 @@ static Vector<Color> _decode_vertex_attrib_color(const ufbx_vertex_vec4 &p_attri
 		ret.write[i] = _as_color(p_attrib[p_indices[i]]);
 	}
 	return ret;
+}
+
+static Vector3 _encode_vertex_index(uint32_t p_index) {
+	return Vector3(real_t(p_index & 0xffff), real_t(p_index >> 16), 0.0f);
+}
+
+static uint32_t _decode_vertex_index(const Vector3 &p_vertex) {
+	return uint32_t(p_vertex.x) | uint32_t(p_vertex.y) << 16;
 }
 
 Error FBXDocument::_parse_json(const String &p_path, Ref<FBXState> p_state) {
@@ -1532,6 +1555,11 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 		}
 		import_mesh->set_name(_gen_unique_name(p_state, mesh_name));
 
+		bool use_blend_shapes = false;
+		if (fbx_mesh->blend_deformers.count > 0) {
+			use_blend_shapes = true;
+		}
+
 		Vector<float> blend_weights;
 		for (const ufbx_mesh_material &fbx_mesh_mat : fbx_mesh->materials) {
 			for (Mesh::PrimitiveType primitive : primitive_types) {
@@ -1614,12 +1642,44 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 				Array array;
 				array.resize(Mesh::ARRAY_MAX);
 
-				array[Mesh::ARRAY_VERTEX] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_position, indices);
-				if (fbx_mesh->vertex_normal.exists) {
-					array[Mesh::ARRAY_NORMAL] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_normal, indices);
+				// HACK: If we have blend shapes we cannot merge vertices at identical positions
+				// if they have different indices in the file. To avoid this encode the vertex index
+				// into the vertex position for the time being.
+				// Ideally this would be an extra channel in the vertex but as the vertex format is
+				// fixed and we already use user data for extra UV channels this'll do.
+				if (use_blend_shapes) {
+					Vector<Vector3> vertex_indices;
+					int num_indices = indices.size();
+					vertex_indices.resize(num_indices);
+					for (int i = 0; i < num_indices; i++) {
+						vertex_indices.write[i] = _encode_vertex_index(fbx_mesh->vertex_indices[indices[i]]);
+					}
+					array[Mesh::ARRAY_VERTEX] = vertex_indices;
+				} else {
+					array[Mesh::ARRAY_VERTEX] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_position, indices);
 				}
+
+				// Normals always exist as they're generated if missing,
+				// see `ufbx_load_opts.generate_missing_normals`.
+				Vector<Vector3> normals = _decode_vertex_attrib_vec3(fbx_mesh->vertex_normal, indices);
+				array[Mesh::ARRAY_NORMAL] = normals;
+
 				if (fbx_mesh->vertex_tangent.exists) {
-					array[Mesh::ARRAY_NORMAL] = _decode_vertex_attrib_vec3(fbx_mesh->vertex_tangent, indices);
+					Vector<float> tangents = _decode_vertex_attrib_vec3_as_tangent(fbx_mesh->vertex_tangent, indices);
+
+					// Patch bitangent sign if available
+					if (fbx_mesh->vertex_bitangent.exists) {
+						for (int i = 0; i < vertex_num; i++) {
+							Vector3 tangent = Vector3(tangents[i * 4], tangents[i * 4 + 1], tangents[i * 4 + 2]);
+							Vector3 bitangent = _as_vec3(fbx_mesh->vertex_bitangent[indices[i]]);
+							Vector3 generated_bitangent = normals[i].cross(tangent);
+							if (generated_bitangent.dot(bitangent) < 0.0f) {
+								tangents.write[i * 4 + 3] = -1.0f;
+							}
+						}
+					}
+
+					array[Mesh::ARRAY_TANGENT] = tangents;
 				}
 				if (fbx_mesh->vertex_uv.exists) {
 					PackedVector2Array uv_array = _decode_vertex_attrib_vec2(fbx_mesh->vertex_uv, indices);
@@ -1759,11 +1819,9 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 				Array morphs;
 				//blend shapes
-				if (fbx_mesh->blend_deformers.count > 0) {
+				if (use_blend_shapes) {
 					print_verbose("FBX: Mesh has targets");
 
-					// TODO: GLTF uses `Mesh::BLEND_SHAPE_MODE_NORMALIZED` here with comment that using `RELATIVE`
-					// would require a refactor, is this still relevant?
 					import_mesh->set_blend_shape_mode(Mesh::BLEND_SHAPE_MODE_NORMALIZED);
 
 					for (const ufbx_blend_deformer *fbx_deformer : fbx_mesh->blend_deformers) {
@@ -1791,31 +1849,49 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 								array_copy[l] = array[l];
 							}
 
-							if (fbx_shape->position_offsets.count > 0) {
-								Vector<Vector3> varr;
-								const Vector<Vector3> src_varr = array[Mesh::ARRAY_VERTEX];
-								const int size = src_varr.size();
-								ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
-								{
-									varr.resize(size);
+							Vector<Vector3> varr;
+							Vector<Vector3> narr;
+							const Vector<Vector3> src_varr = array[Mesh::ARRAY_VERTEX];
+							const Vector<Vector3> src_narr = array[Mesh::ARRAY_NORMAL];
+							const int size = src_varr.size();
+							ERR_FAIL_COND_V(size == 0, ERR_PARSE_ERROR);
+							{
+								varr.resize(size);
+								narr.resize(size);
 
-									Vector3 *w_varr = varr.ptrw();
-									const Vector3 *r_varr = varr.ptr();
-									for (int l = 0; l < size; l++) {
-										int32_t vertex_index = fbx_mesh->vertex_indices[uint32_t(indices[l])];
-										Vector3 blender_shape_offset = _as_vec3(ufbx_get_blend_shape_vertex_offset(fbx_shape, vertex_index));
-										w_varr[l] = r_varr[l] + blender_shape_offset;
+								Vector3 *w_varr = varr.ptrw();
+								Vector3 *w_narr = narr.ptrw();
+								const Vector3 *r_varr = src_varr.ptr();
+								const Vector3 *r_narr = src_narr.ptr();
+								for (int l = 0; l < size; l++) {
+									uint32_t vertex_index = _decode_vertex_index(r_varr[l]);
+									uint32_t offset_index = ufbx_get_blend_shape_offset_index(fbx_shape, vertex_index);
+									Vector3 position = _as_vec3(fbx_mesh->vertices[vertex_index]);
+									Vector3 normal = r_narr[l];
+
+									if (offset_index != UFBX_NO_INDEX && offset_index < fbx_shape->position_offsets.count) {
+										Vector3 offset = _as_vec3(fbx_shape->position_offsets[offset_index]);
+										w_varr[l] = position + offset;
+									} else {
+										w_varr[l] = position;
+									}
+
+									if (offset_index != UFBX_NO_INDEX && offset_index < fbx_shape->normal_offsets.count) {
+										w_narr[l] = (normal.normalized() + _as_vec3(fbx_shape->normal_offsets[offset_index])).normalized();
+									} else {
+										w_narr[l] = normal;
 									}
 								}
-								array_copy[Mesh::ARRAY_VERTEX] = varr;
 							}
+							array_copy[Mesh::ARRAY_VERTEX] = varr;
+							array_copy[Mesh::ARRAY_NORMAL] = narr;
 
 							Ref<SurfaceTool> blend_surface_tool;
 							blend_surface_tool.instantiate();
 							blend_surface_tool->create_from_triangle_arrays(array_copy);
-							mesh_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
-							blend_surface_tool->index();
+							blend_surface_tool->set_skin_weight_count(num_skin_weights == 8 ? SurfaceTool::SKIN_8_WEIGHTS : SurfaceTool::SKIN_4_WEIGHTS);
 							if (generate_tangents) {
+								//must generate mikktspace tangents.. ergh..
 								blend_surface_tool->generate_tangents();
 							}
 							array_copy = blend_surface_tool->commit_to_arrays();
@@ -1830,6 +1906,18 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 							morphs.push_back(array_copy);
 						}
 					}
+				}
+
+				// Decode the original vertex positions now that we're done processing blend shapes.
+				if (use_blend_shapes) {
+					Vector<Vector3> varr = array[Mesh::ARRAY_VERTEX];
+					Vector3 *w_varr = varr.ptrw();
+					const int size = varr.size();
+					for (int i = 0; i < size; i++) {
+						uint32_t vertex_index = _decode_vertex_index(w_varr[i]);
+						w_varr[i] = _as_vec3(fbx_mesh->vertices[vertex_index]);
+					}
+					array[Mesh::ARRAY_VERTEX] = varr;
 				}
 
 				Ref<Material> mat;
@@ -4795,6 +4883,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
 	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
+	opts.generate_missing_normals = true;
 
 	ufbx_error error;
 	ufbx_stream file_stream = {};
