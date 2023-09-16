@@ -4967,7 +4967,7 @@ Node *FBXDocument::generate_scene(Ref<FBXState> p_state, float p_bake_fps, bool 
 }
 
 Error FBXDocument::append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32_t p_flags) {
-	ERR_FAIL_NULL_V(p_node, FAILED);	
+	ERR_FAIL_NULL_V(p_node, FAILED);
 	ERR_FAIL_NULL_V(p_state, FAILED);
 	p_state->use_named_skin_binds = p_flags & FBX_IMPORT_USE_NAMED_SKIN_BINDS;
 	p_state->discard_meshes_and_materials = p_flags & FBX_IMPORT_DISCARD_MESHES_AND_MATERIALS;
