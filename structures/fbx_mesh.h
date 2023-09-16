@@ -55,4 +55,4 @@ public:
 	void set_instance_materials(TypedArray<Material> p_instance_materials);
 };
 
-#endif // GLTF_MESH_H
+#endif // FBX_MESH_H

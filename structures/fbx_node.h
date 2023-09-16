@@ -96,4 +96,4 @@ public:
 	void set_additional_data(const StringName &p_extension_name, Variant p_additional_data);
 };
 
-#endif // GLTF_NODE_H
+#endif // FBX_NODE_H

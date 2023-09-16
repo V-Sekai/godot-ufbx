@@ -111,4 +111,4 @@ public:
 	void set_godot_skin(Ref<Skin> p_godot_skin);
 };
 
-#endif // GLTF_SKIN_H
+#endif // FBX_SKIN_H

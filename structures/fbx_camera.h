@@ -72,4 +72,4 @@ public:
 	Dictionary to_dictionary() const;
 };
 
-#endif // GLTF_CAMERA_H
+#endif // FBX_CAMERA_H

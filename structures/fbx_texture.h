@@ -52,4 +52,4 @@ public:
 	void set_sampler(FBXTextureSamplerIndex val);
 };
 
-#endif // GLTF_TEXTURE_H
+#endif // FBX_TEXTURE_H

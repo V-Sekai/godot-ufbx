@@ -67,4 +67,4 @@ public:
 	// matrices need to be transformed to this
 };
 
-#endif // GLTF_BUFFER_VIEW_H
+#endif // FBX_BUFFER_VIEW_H

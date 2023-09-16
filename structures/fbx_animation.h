@@ -72,4 +72,4 @@ private:
 	HashMap<int, Track> tracks;
 };
 
-#endif // GLTF_ANIMATION_H
+#endif // FBX_ANIMATION_H

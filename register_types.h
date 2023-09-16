@@ -28,12 +28,12 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef UFBX_REGISTER_TYPES_H
-#define UFBX_REGISTER_TYPES_H
+#ifndef FBX_REGISTER_TYPES_H
+#define FBX_REGISTER_TYPES_H
 
 #include "modules/register_module_types.h"
 
 void initialize_fbx_module(ModuleInitializationLevel p_level);
 void uninitialize_fbx_module(ModuleInitializationLevel p_level);
 
-#endif // UFBX_REGISTER_TYPES_H
+#endif // FBX_REGISTER_TYPES_H
