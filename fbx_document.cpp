@@ -2470,6 +2470,27 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 		p_state->skins.push_back(skin);
 	}
 
+	// Mark all bones as joints to form skeletons.
+	for (const ufbx_bone *fbx_bone : fbx_scene->bones) {
+		for (const ufbx_node *fbx_node : fbx_bone->instances) {
+			const FBXNodeIndex node = fbx_node->typed_id;
+			if (!p_state->nodes.write[node]->joint) {
+				p_state->nodes.write[node]->joint = true;
+
+				// Mark root bones as virtual skins, we only need to mark the root node
+				// as `_expand_skin()` below will capture child bones.
+				if (!(fbx_node->parent && fbx_node->parent->attrib_type == UFBX_ELEMENT_BONE)) {
+					Ref<FBXSkin> skin;
+					skin.instantiate();
+					skin->joints.push_back(node);
+					skin->joints_original.push_back(node);
+					skin->set_name(vformat("skin_%s", itos(p_state->skins.size())));
+					p_state->skins.push_back(skin);
+				}
+			}
+		}
+	}
+
 	for (FBXSkinIndex i = 0; i < p_state->skins.size(); ++i) {
 		Ref<FBXSkin> skin = p_state->skins.write[i];
 
