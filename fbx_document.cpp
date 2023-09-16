@@ -2127,11 +2127,11 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 			if (!fbx_material->pbr.base_color.has_value) {
 				material->set_albedo(Color(1, 1, 1));
 			}
-			if (base_texture->has_uv_transform) {
-				// TODO: Does not support rotation, could be inverted?
-				material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
-				material->set_uv1_scale(_as_vec3(base_texture->uv_transform.scale));
-			}
+			// TODO: Does not support rotation, could be inverted?
+			material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
+			Vector3 scale = _as_vec3(base_texture->uv_transform.scale);
+			scale.y *= -1;
+			material->set_uv1_scale(scale);
 		}
 
 		if (fbx_material->features.pbr.enabled) {
