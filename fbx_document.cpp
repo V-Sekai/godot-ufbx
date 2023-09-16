@@ -1649,9 +1649,9 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 				// fixed and we already use user data for extra UV channels this'll do.
 				if (use_blend_shapes) {
 					Vector<Vector3> vertex_indices;
-					int num_indices = indices.size();
-					vertex_indices.resize(num_indices);
-					for (int i = 0; i < num_indices; i++) {
+					int num_blend_shape_indices = indices.size();
+					vertex_indices.resize(num_blend_shape_indices);
+					for (int i = 0; i < num_blend_shape_indices; i++) {
 						vertex_indices.write[i] = _encode_vertex_index(fbx_mesh->vertex_indices[indices[i]]);
 					}
 					array[Mesh::ARRAY_VERTEX] = vertex_indices;
@@ -1870,8 +1870,8 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 									Vector3 normal = r_narr[l];
 
 									if (offset_index != UFBX_NO_INDEX && offset_index < fbx_shape->position_offsets.count) {
-										Vector3 offset = _as_vec3(fbx_shape->position_offsets[offset_index]);
-										w_varr[l] = position + offset;
+										Vector3 blend_shape_position_offset = _as_vec3(fbx_shape->position_offsets[offset_index]);
+										w_varr[l] = position + blend_shape_position_offset;
 									} else {
 										w_varr[l] = position;
 									}
