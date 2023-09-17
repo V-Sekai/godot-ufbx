@@ -690,27 +690,34 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					for (int32_t vertex_i = 0; vertex_i < vertex_num; vertex_i++) {
 						uint32_t fbx_vertex_index = fbx_mesh->vertex_indices[indices[vertex_i]];
 						ufbx_skin_vertex skin_vertex = fbx_skin->vertices[fbx_vertex_index];
-
 						float total_weight = 0.0f;
 						for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
 							ufbx_skin_weight skin_weight = fbx_skin->weights[skin_vertex.weight_begin + i];
-							bones.write[vertex_i * num_skin_weights + i] = int(skin_weight.cluster_index);
-							weights.write[vertex_i * num_skin_weights + i] = float(skin_weight.weight);
-							total_weight += float(skin_weight.weight);
+
+							int index = vertex_i * num_skin_weights + i;
+							if (index < bones.size() && index < weights.size()) {
+								bones.write[index] = int(skin_weight.cluster_index);
+								weights.write[index] = float(skin_weight.weight);
+								total_weight += float(skin_weight.weight);
+							}
 						}
 						if (total_weight > 0.0f) {
 							for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
-								weights.write[vertex_i * num_skin_weights + i] /= total_weight;
+								int index = vertex_i * num_skin_weights + i;
+								if (index < weights.size()) {
+									weights.write[index] /= total_weight;
+								}
 							}
 						}
-
 						// Pad the rest with empty weights
 						for (int32_t i = int32_t(skin_vertex.num_weights); i < num_skin_weights; i++) {
-							bones.write[vertex_i * num_skin_weights + i] = 0; // TODO: What should this be padded with?
-							weights.write[vertex_i * num_skin_weights + i] = 0.0f;
+							int index = vertex_i * num_skin_weights + i;
+							if (index < bones.size() && index < weights.size()) {
+								bones.write[index] = 0; // TODO: What should this be padded with?
+								weights.write[index] = 0.0f;
+							}
 						}
 					}
-
 					array[Mesh::ARRAY_BONES] = bones;
 					array[Mesh::ARRAY_WEIGHTS] = weights;
 				}
