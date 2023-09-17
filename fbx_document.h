@@ -45,25 +45,6 @@ private:
 
 public:
 	const int32_t JOINT_GROUP_SIZE = 4;
-
-	enum {
-		ARRAY_BUFFER = 34962,
-		ELEMENT_ARRAY_BUFFER = 34963,
-
-		TYPE_BYTE = 5120,
-		TYPE_UNSIGNED_BYTE = 5121,
-		TYPE_SHORT = 5122,
-		TYPE_UNSIGNED_SHORT = 5123,
-		TYPE_UNSIGNED_INT = 5125,
-		TYPE_FLOAT = 5126,
-
-		COMPONENT_TYPE_BYTE = 5120,
-		COMPONENT_TYPE_UNSIGNED_BYTE = 5121,
-		COMPONENT_TYPE_SHORT = 5122,
-		COMPONENT_TYPE_UNSIGNED_SHORT = 5123,
-		COMPONENT_TYPE_INT = 5125,
-		COMPONENT_TYPE_FLOAT = 5126,
-	};
 	enum {
 		TEXTURE_TYPE_GENERIC = 0,
 		TEXTURE_TYPE_NORMAL = 1,
@@ -79,13 +60,8 @@ public:
 
 private:
 	void _build_parent_hierarchy(Ref<FBXState> p_state);
-	double _filter_number(double p_float);
-	String _get_component_type_name(const uint32_t p_component);
-	int _get_component_type_size(const int p_component_type);
 	Error _parse_scenes(Ref<FBXState> p_state);
 	Error _parse_nodes(Ref<FBXState> p_state);
-	String _get_type_name(const FBXType p_component);
-	String _get_accessor_type_name(const FBXType p_type);
 	String _gen_unique_name(Ref<FBXState> p_state, const String &p_name);
 	String _sanitize_animation_name(const String &p_name);
 	String _gen_unique_animation_name(Ref<FBXState> p_state, const String &p_name);
@@ -93,47 +69,8 @@ private:
 	String _gen_unique_bone_name(Ref<FBXState> p_state,
 			const FBXSkeletonIndex p_skel_i,
 			const String &p_name);
-	FBXTextureIndex _set_texture(Ref<FBXState> p_state, Ref<Texture2D> p_texture,
-			StandardMaterial3D::TextureFilter p_filter_mode, bool p_repeats);
 	Ref<Texture2D> _get_texture(Ref<FBXState> p_state,
 			const FBXTextureIndex p_texture, int p_texture_type);
-	FBXTextureSamplerIndex _set_sampler_for_mode(Ref<FBXState> p_state,
-			StandardMaterial3D::TextureFilter p_filter_mode, bool p_repeats);
-	Ref<FBXTextureSampler> _get_sampler_for_texture(Ref<FBXState> p_state,
-			const FBXTextureIndex p_texture);
-	Error _parse_json(const String &p_path, Ref<FBXState> p_state);
-	Error _parse_glb(Ref<FileAccess> p_file, Ref<FBXState> p_state);
-	FBXType _get_type_from_str(const String &p_string);
-	Vector<double> _decode_accessor(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<float> _decode_accessor_as_floats(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<int> _decode_accessor_as_ints(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Vector2> _decode_accessor_as_vec2(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Vector3> _decode_accessor_as_vec3(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Color> _decode_accessor_as_color(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Quaternion> _decode_accessor_as_quaternion(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Transform2D> _decode_accessor_as_xform2d(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Basis> _decode_accessor_as_basis(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
-	Vector<Transform3D> _decode_accessor_as_xform(Ref<FBXState> p_state,
-			const FBXAccessorIndex p_accessor,
-			const bool p_for_vertex);
 	Error _parse_meshes(Ref<FBXState> p_state);
 	Ref<Image> _parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_filename, int p_index);
 	void _parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image);
@@ -174,81 +111,11 @@ private:
 	T _interpolate_track(const Vector<real_t> &p_times, const Vector<T> &p_values,
 			const float p_time,
 			const FBXAnimation::Interpolation p_interp);
-	FBXAccessorIndex _encode_accessor_as_quaternions(Ref<FBXState> p_state,
-			const Vector<Quaternion> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_weights(Ref<FBXState> p_state,
-			const Vector<Color> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_joints(Ref<FBXState> p_state,
-			const Vector<Color> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_floats(Ref<FBXState> p_state,
-			const Vector<real_t> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_vec2(Ref<FBXState> p_state,
-			const Vector<Vector2> p_attribs,
-			const bool p_for_vertex);
-
-	void _calc_accessor_vec2_min_max(int p_i, const int p_element_count, Vector<double> &p_type_max, Vector2 p_attribs, Vector<double> &p_type_min) {
-		if (p_i == 0) {
-			for (int32_t type_i = 0; type_i < p_element_count; type_i++) {
-				p_type_max.write[type_i] = p_attribs[(p_i * p_element_count) + type_i];
-				p_type_min.write[type_i] = p_attribs[(p_i * p_element_count) + type_i];
-			}
-		}
-		for (int32_t type_i = 0; type_i < p_element_count; type_i++) {
-			p_type_max.write[type_i] = MAX(p_attribs[(p_i * p_element_count) + type_i], p_type_max[type_i]);
-			p_type_min.write[type_i] = MIN(p_attribs[(p_i * p_element_count) + type_i], p_type_min[type_i]);
-			p_type_max.write[type_i] = _filter_number(p_type_max.write[type_i]);
-			p_type_min.write[type_i] = _filter_number(p_type_min.write[type_i]);
-		}
-	}
-
-	FBXAccessorIndex _encode_accessor_as_vec3(Ref<FBXState> p_state,
-			const Vector<Vector3> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_color(Ref<FBXState> p_state,
-			const Vector<Color> p_attribs,
-			const bool p_for_vertex);
-
-	void _calc_accessor_min_max(int p_i, const int p_element_count, Vector<double> &p_type_max, Vector<double> p_attribs, Vector<double> &p_type_min);
-
-	FBXAccessorIndex _encode_accessor_as_ints(Ref<FBXState> p_state,
-			const Vector<int32_t> p_attribs,
-			const bool p_for_vertex);
-	FBXAccessorIndex _encode_accessor_as_xform(Ref<FBXState> p_state,
-			const Vector<Transform3D> p_attribs,
-			const bool p_for_vertex);
-	Error _encode_buffer_view(Ref<FBXState> p_state, const double *p_src,
-			const int p_count, const FBXType p_type,
-			const int p_component_type, const bool p_normalized,
-			const int p_byte_offset, const bool p_for_vertex,
-			FBXBufferViewIndex &r_accessor);
-	Error _encode_accessors(Ref<FBXState> p_state);
-	Error _encode_buffer_views(Ref<FBXState> p_state);
-	String interpolation_to_string(const FBXAnimation::Interpolation p_interp);
 	FBXAnimation::Track _convert_animation_track(Ref<FBXState> p_state,
 			FBXAnimation::Track p_track,
 			Ref<Animation> p_animation,
 			int32_t p_track_i,
 			FBXNodeIndex p_node_i);
-
-public:
-	// https://www.itu.int/rec/R-REC-BT.601
-	// https://www.itu.int/dms_pubrec/itu-r/rec/bt/R-REC-BT.601-7-201103-I!!PDF-E.pdf
-	static constexpr float R_BRIGHTNESS_COEFF = 0.299f;
-	static constexpr float G_BRIGHTNESS_COEFF = 0.587f;
-	static constexpr float B_BRIGHTNESS_COEFF = 0.114f;
-
-private:
-	// https://github.com/microsoft/glTF-SDK/blob/master/GLTFSDK/Source/PBRUtils.cpp#L9
-	// https://bghgary.github.io/glTF/convert-between-workflows-bjs/js/babylon.pbrUtilities.js
-	static float solve_metallic(float p_dielectric_specular, float p_diffuse,
-			float p_specular,
-			float p_one_minus_specular_strength);
-	static float get_perceived_brightness(const Color p_color);
-	static float get_max_component(const Color &p_color);
 
 public:
 	Error append_from_file(String p_path, Ref<FBXState> p_state, uint32_t p_flags = 0, String p_base_path = String());

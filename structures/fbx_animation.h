@@ -49,7 +49,7 @@ public:
 
 	template <class T>
 	struct Channel {
-		Interpolation interpolation;
+		Interpolation interpolation = INTERP_LINEAR;
 		Vector<real_t> times;
 		Vector<T> values;
 	};
