@@ -38,8 +38,10 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/file_access_memory.h"
+#include "core/io/image.h"
 #include "core/io/json.h"
 #include "core/io/stream_peer.h"
+#include "core/math/color.h"
 #include "core/math/disjoint_set.h"
 #include "core/string/print_string.h"
 #include "core/version.h"
@@ -51,6 +53,7 @@
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/3d/multimesh_instance_3d.h"
 #include "scene/resources/image_texture.h"
+#include "scene/resources/material.h"
 #include "scene/resources/portable_compressed_texture.h"
 #include "scene/resources/skin.h"
 #include "scene/resources/surface_tool.h"
@@ -1080,15 +1083,52 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 		Dictionary material_extensions;
 
 		if (fbx_material->pbr.base_color.has_value) {
-			material->set_albedo(_material_color(fbx_material->pbr.base_color, fbx_material->pbr.base_factor));
+			Color albedo = _material_color(fbx_material->pbr.base_color, fbx_material->pbr.base_factor);
+			material->set_albedo(albedo);
+		}
+
+		if (fbx_material->features.double_sided.enabled) {
+			material->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
 		}
 
 		const ufbx_texture *base_texture = _get_file_texture(fbx_material->pbr.base_color.texture);
 		if (base_texture) {
-			{
-				bool wrap = base_texture->wrap_u == UFBX_WRAP_REPEAT && base_texture->wrap_v == UFBX_WRAP_REPEAT;
-				material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, wrap);
-				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC));
+			bool wrap = base_texture->wrap_u == UFBX_WRAP_REPEAT && base_texture->wrap_v == UFBX_WRAP_REPEAT;
+			material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, wrap);
+			Ref<Texture2D> albedo_texture = _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC);
+			if (fbx_material->fbx.transparency_color.texture_enabled) {
+				const ufbx_texture *fbx_transparency_texture = _get_file_texture(fbx_material->fbx.transparency_color.texture);
+				Ref<Texture2D> transparency_texture = _get_texture(p_state, FBXTextureIndex(fbx_transparency_texture->file_index), TEXTURE_TYPE_GENERIC);
+				if (transparency_texture.is_valid()) {
+					Ref<Image> transparency_image = transparency_texture->get_image();
+					transparency_image->decompress();
+					transparency_image->resize(albedo_texture->get_width(), albedo_texture->get_height(), Image::INTERPOLATE_LANCZOS);
+					Ref<Image> albedo_image = albedo_texture->get_image();
+					albedo_image->decompress();
+					for (int y = 0; y < albedo_image->get_height(); y++) {
+						for (int x = 0; x < albedo_image->get_width(); x++) {
+							Color albedo_pixel = albedo_image->get_pixel(x, y);
+							Color transparency_pixel = transparency_image->get_pixel(x, y);
+							albedo_pixel.a *= transparency_pixel.r;
+							albedo_image->set_pixel(x, y, albedo_pixel);
+						}
+					}
+					albedo_image->clear_mipmaps();
+					albedo_image->generate_mipmaps();
+					if (albedo_image->detect_alpha() == Image::ALPHA_BLEND) {
+						material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS);
+					} else if (albedo_image->detect_alpha() == Image::ALPHA_BLEND) {
+						material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
+					}
+					Ref<PortableCompressedTexture2D> new_albedo_texture;
+					new_albedo_texture.instantiate();
+					new_albedo_texture->create_from_image(albedo_image, PortableCompressedTexture2D::COMPRESSION_MODE_BASIS_UNIVERSAL);
+					p_state->images.write[FBXTextureIndex(base_texture->file_index)] = new_albedo_texture;
+					p_state->source_images.write[FBXTextureIndex(base_texture->file_index)] = albedo_image;
+					material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, new_albedo_texture);
+				}
+			} else {
+				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, albedo_texture);
 			}
 			if (!fbx_material->pbr.base_color.has_value) {
 				material->set_albedo(Color(1, 1, 1));
