@@ -45,10 +45,7 @@ class Skeleton3D;
 class Skin;
 
 // GLTF classes.
-struct FBXAccessor;
 class FBXAnimation;
-class FBXBufferView;
-class FBXCamera;
 class FBXDocument;
 class FBXDocumentExtension;
 class FBXMesh;
@@ -57,14 +54,10 @@ class FBXSkeleton;
 class FBXSkin;
 class FBXState;
 class FBXTexture;
-class FBXTextureSampler;
 
 // GLTF index aliases.
-using FBXAccessorIndex = int;
 using FBXAnimationIndex = int;
 using FBXBufferIndex = int;
-using FBXBufferViewIndex = int;
-using FBXCameraIndex = int;
 using FBXImageIndex = int;
 using FBXMaterialIndex = int;
 using FBXMeshIndex = int;
@@ -72,7 +65,6 @@ using FBXNodeIndex = int;
 using FBXSkeletonIndex = int;
 using FBXSkinIndex = int;
 using FBXTextureIndex = int;
-using FBXTextureSamplerIndex = int;
 
 enum FBXType {
 	TYPE_SCALAR,

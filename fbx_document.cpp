@@ -392,9 +392,6 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 		if (fbx_node->name.length > 0) {
 			node->set_name(_as_string(fbx_node->name));
 		}
-		if (fbx_node->camera) {
-			node->camera = fbx_node->camera->typed_id;
-		}
 		if (fbx_node->mesh) {
 			node->mesh = fbx_node->mesh->typed_id;
 		}
@@ -1888,35 +1885,6 @@ void FBXDocument::_remove_duplicate_skins(Ref<FBXState> p_state) {
 	}
 }
 
-Error FBXDocument::_parse_cameras(Ref<FBXState> p_state) {
-	const ufbx_scene *fbx_scene = p_state->scene.get();
-	for (FBXCameraIndex camera_i = 0; camera_i < static_cast<FBXCameraIndex>(fbx_scene->cameras.count); camera_i++) {
-		const ufbx_camera *fbx_camera = fbx_scene->cameras[camera_i];
-
-		Ref<FBXCamera> camera;
-		camera.instantiate();
-
-		// TODO: Check units.
-		if (fbx_camera->projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE) {
-			camera->set_perspective(true);
-			camera->set_fov(Math::deg_to_rad(real_t(fbx_camera->field_of_view_deg.y)));
-		} else {
-			camera->set_perspective(false);
-			camera->set_size_mag(real_t(fbx_camera->orthographic_extent));
-		}
-		if (fbx_camera->near_plane != 0.0f) {
-			camera->set_depth_near(fbx_camera->near_plane);
-		}
-		if (fbx_camera->far_plane != 0.0f) {
-			camera->set_depth_far(fbx_camera->far_plane);
-		}
-	}
-
-	print_verbose("FBX: Total cameras: " + itos(p_state->cameras.size()));
-
-	return OK;
-}
-
 Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 	for (FBXAnimationIndex animation_i = 0; animation_i < static_cast<FBXAnimationIndex>(fbx_scene->anim_stacks.count); animation_i++) {
@@ -2060,8 +2028,6 @@ void FBXDocument::_assign_node_names(Ref<FBXState> p_state) {
 		if (fbx_node->get_name().is_empty()) {
 			if (fbx_node->mesh >= 0) {
 				fbx_node->set_name(_gen_unique_name(p_state, "Mesh"));
-			} else if (fbx_node->camera >= 0) {
-				fbx_node->set_name(_gen_unique_name(p_state, "Camera3D"));
 			} else {
 				fbx_node->set_name(_gen_unique_name(p_state, "Node"));
 			}
@@ -2141,26 +2107,6 @@ ImporterMeshInstance3D *FBXDocument::_generate_mesh_instance(Ref<FBXState> p_sta
 	return mi;
 }
 
-Camera3D *FBXDocument::_generate_camera(Ref<FBXState> p_state, const FBXNodeIndex p_node_index) {
-	Ref<FBXNode> fbx_node = p_state->nodes[p_node_index];
-
-	ERR_FAIL_INDEX_V(fbx_node->camera, p_state->cameras.size(), nullptr);
-
-	print_verbose("glTF: Creating camera for: " + fbx_node->get_name());
-
-	Ref<FBXCamera> c = p_state->cameras[fbx_node->camera];
-	return c->to_node();
-}
-
-FBXCameraIndex FBXDocument::_convert_camera(Ref<FBXState> p_state, Camera3D *p_camera) {
-	print_verbose("glTF: Converting camera: " + p_camera->get_name());
-
-	Ref<FBXCamera> c = FBXCamera::from_node(p_camera);
-	FBXCameraIndex camera_index = p_state->cameras.size();
-	p_state->cameras.push_back(c);
-	return camera_index;
-}
-
 void FBXDocument::_convert_spatial(Ref<FBXState> p_state, Node3D *p_spatial, Ref<FBXNode> p_node) {
 	Transform3D xform = p_spatial->get_transform();
 	p_node->scale = xform.basis.get_scale();
@@ -2217,9 +2163,6 @@ void FBXDocument::_convert_scene_node(Ref<FBXState> p_state, Node *p_current, co
 		GridMap *gridmap = Object::cast_to<GridMap>(p_current);
 		_convert_grid_map_to_fbx(gridmap, p_gltf_parent, p_gltf_root, fbx_node, p_state);
 #endif // MODULE_GRIDMAP_ENABLED
-	} else if (cast_to<Camera3D>(p_current)) {
-		Camera3D *camera = Object::cast_to<Camera3D>(p_current);
-		_convert_camera_to_fbx(camera, p_state, fbx_node);
 	} else if (cast_to<AnimationPlayer>(p_current)) {
 		AnimationPlayer *animation_player = Object::cast_to<AnimationPlayer>(p_current);
 		_convert_animation_player_to_fbx(animation_player, p_state, p_gltf_parent, p_gltf_root, fbx_node, p_current);
@@ -2310,14 +2253,6 @@ void FBXDocument::_check_visibility(Node *p_node, bool &r_retflag) {
 		return;
 	}
 	r_retflag = false;
-}
-
-void FBXDocument::_convert_camera_to_fbx(Camera3D *camera, Ref<FBXState> p_state, Ref<FBXNode> p_gltf_node) {
-	ERR_FAIL_COND(!camera);
-	FBXCameraIndex camera_index = _convert_camera(p_state, camera);
-	if (camera_index != -1) {
-		p_gltf_node->camera = camera_index;
-	}
 }
 
 #ifdef MODULE_GRIDMAP_ENABLED
@@ -2550,8 +2485,6 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 			current_node->add_child(mesh_inst, true);
 		} else if (fbx_node->mesh >= 0) {
 			current_node = _generate_mesh_instance(p_state, p_node_index);
-		} else if (fbx_node->camera >= 0) {
-			current_node = _generate_camera(p_state, p_node_index);
 		} else {
 			current_node = _generate_spatial(p_state, p_node_index);
 		}
@@ -2583,7 +2516,7 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 	Skeleton3D *skeleton = p_state->skeletons[fbx_node->skeleton]->godot_skeleton;
 	// In this case, this node is already a bone in skeleton.
 	const bool is_skinned_mesh = (fbx_node->skin >= 0 && fbx_node->mesh >= 0);
-	const bool requires_extra_node = (fbx_node->mesh >= 0 || fbx_node->camera >= 0);
+	const bool requires_extra_node = (fbx_node->mesh >= 0);
 
 	Skeleton3D *active_skeleton = Object::cast_to<Skeleton3D>(p_scene_parent);
 	if (active_skeleton != skeleton) {
@@ -2637,8 +2570,6 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 		if (!current_node) {
 			if (fbx_node->mesh >= 0) {
 				current_node = _generate_mesh_instance(p_state, p_node_index);
-			} else if (fbx_node->camera >= 0) {
-				current_node = _generate_camera(p_state, p_node_index);
 			} else {
 				current_node = _generate_spatial(p_state, p_node_index);
 			}
@@ -3885,10 +3816,6 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 
 	/* PARSE MESHES (we have enough info now) */
 	err = _parse_meshes(p_state);
-	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
-
-	/* PARSE CAMERAS */
-	err = _parse_cameras(p_state);
 	ERR_FAIL_COND_V(err != OK, ERR_PARSE_ERROR);
 
 	/* PARSE ANIMATIONS */

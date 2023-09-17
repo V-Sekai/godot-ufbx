@@ -40,7 +40,6 @@ class FBXTexture : public Resource {
 
 private:
 	FBXImageIndex src_image = -1;
-	FBXTextureSamplerIndex sampler = -1;
 
 protected:
 	static void _bind_methods();
@@ -48,8 +47,6 @@ protected:
 public:
 	FBXImageIndex get_src_image() const;
 	void set_src_image(FBXImageIndex val);
-	FBXTextureSamplerIndex get_sampler() const;
-	void set_sampler(FBXTextureSamplerIndex val);
 };
 
 #endif // FBX_TEXTURE_H

@@ -97,7 +97,6 @@ private:
 	Error _create_skins(Ref<FBXState> p_state);
 	bool _skins_are_same(const Ref<Skin> p_skin_a, const Ref<Skin> p_skin_b);
 	void _remove_duplicate_skins(Ref<FBXState> p_state);
-	Error _parse_cameras(Ref<FBXState> p_state);
 	Error _parse_animations(Ref<FBXState> p_state);
 	BoneAttachment3D *_generate_bone_attachment(Ref<FBXState> p_state,
 			Skeleton3D *p_skeleton,
@@ -133,7 +132,6 @@ public:
 	void _import_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player,
 			const FBXAnimationIndex p_index, const float p_bake_fps, const bool p_trimming, const bool p_remove_immutable_tracks);
 	void _convert_mesh_instances(Ref<FBXState> p_state);
-	FBXCameraIndex _convert_camera(Ref<FBXState> p_state, Camera3D *p_camera);
 	void _convert_spatial(Ref<FBXState> p_state, Node3D *p_spatial, Ref<FBXNode> p_node);
 	void _convert_scene_node(Ref<FBXState> p_state, Node *p_current,
 			const FBXNodeIndex p_fbx_current,
@@ -155,8 +153,6 @@ public:
 			FBXNodeIndex p_gltf_root_index,
 			Ref<FBXNode> p_gltf_node, Node *p_scene_parent);
 	void _check_visibility(Node *p_node, bool &r_retflag);
-	void _convert_camera_to_fbx(Camera3D *p_camera, Ref<FBXState> p_state,
-			Ref<FBXNode> p_gltf_node);
 #ifdef MODULE_GRIDMAP_ENABLED
 	void _convert_grid_map_to_fbx(
 			GridMap *p_grid_map,

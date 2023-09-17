@@ -31,16 +31,12 @@
 #ifndef FBX_STATE_H
 #define FBX_STATE_H
 
-#include "structures/fbx_accessor.h"
 #include "structures/fbx_animation.h"
-#include "structures/fbx_buffer_view.h"
-#include "structures/fbx_camera.h"
 #include "structures/fbx_mesh.h"
 #include "structures/fbx_node.h"
 #include "structures/fbx_skeleton.h"
 #include "structures/fbx_skin.h"
 #include "structures/fbx_texture.h"
-#include "structures/fbx_texture_sampler.h"
 
 #include "thirdparty/ufbx/ufbx.h"
 
@@ -68,8 +64,6 @@ class FBXState : public Resource {
 
 	Vector<Ref<FBXNode>> nodes;
 	Vector<Vector<uint8_t>> buffers;
-	Vector<Ref<FBXBufferView>> buffer_views;
-	Vector<Ref<FBXAccessor>> accessors;
 
 	Vector<Ref<FBXMesh>> meshes; // meshes are loaded directly, no reason not to.
 
@@ -80,15 +74,12 @@ class FBXState : public Resource {
 	String scene_name;
 	Vector<int> root_nodes;
 	Vector<Ref<FBXTexture>> textures;
-	Vector<Ref<FBXTextureSampler>> texture_samplers;
-	Ref<FBXTextureSampler> default_texture_sampler;
 	Vector<Ref<Texture2D>> images;
 	Vector<String> extensions_used;
 	Vector<String> extensions_required;
 	Vector<Ref<Image>> source_images;
 
 	Vector<Ref<FBXSkin>> skins;
-	Vector<Ref<FBXCamera>> cameras;
 	HashSet<String> unique_names;
 	HashSet<String> unique_animation_names;
 
@@ -156,12 +147,6 @@ public:
 	TypedArray<PackedByteArray> get_buffers();
 	void set_buffers(TypedArray<PackedByteArray> p_buffers);
 
-	TypedArray<FBXBufferView> get_buffer_views();
-	void set_buffer_views(TypedArray<FBXBufferView> p_buffer_views);
-
-	TypedArray<FBXAccessor> get_accessors();
-	void set_accessors(TypedArray<FBXAccessor> p_accessors);
-
 	TypedArray<FBXMesh> get_meshes();
 	void set_meshes(TypedArray<FBXMesh> p_meshes);
 
@@ -183,17 +168,11 @@ public:
 	TypedArray<FBXTexture> get_textures();
 	void set_textures(TypedArray<FBXTexture> p_textures);
 
-	TypedArray<FBXTextureSampler> get_texture_samplers();
-	void set_texture_samplers(TypedArray<FBXTextureSampler> p_texture_samplers);
-
 	TypedArray<Texture2D> get_images();
 	void set_images(TypedArray<Texture2D> p_images);
 
 	TypedArray<FBXSkin> get_skins();
 	void set_skins(TypedArray<FBXSkin> p_skins);
-
-	TypedArray<FBXCamera> get_cameras();
-	void set_cameras(TypedArray<FBXCamera> p_cameras);
 
 	TypedArray<String> get_unique_names();
 	void set_unique_names(TypedArray<String> p_unique_names);

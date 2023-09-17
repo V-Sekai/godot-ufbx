@@ -45,7 +45,6 @@ private:
 	int height = -1;
 	Transform3D xform;
 	FBXMeshIndex mesh = -1;
-	FBXCameraIndex camera = -1;
 	FBXSkinIndex skin = -1;
 	FBXSkeletonIndex skeleton = -1;
 	bool joint = false;
@@ -70,9 +69,6 @@ public:
 
 	FBXMeshIndex get_mesh();
 	void set_mesh(FBXMeshIndex p_mesh);
-
-	FBXCameraIndex get_camera();
-	void set_camera(FBXCameraIndex p_camera);
 
 	FBXSkinIndex get_skin();
 	void set_skin(FBXSkinIndex p_skin);

@@ -50,10 +50,6 @@ void FBXState::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_nodes", "nodes"), &FBXState::set_nodes);
 	ClassDB::bind_method(D_METHOD("get_buffers"), &FBXState::get_buffers);
 	ClassDB::bind_method(D_METHOD("set_buffers", "buffers"), &FBXState::set_buffers);
-	ClassDB::bind_method(D_METHOD("get_buffer_views"), &FBXState::get_buffer_views);
-	ClassDB::bind_method(D_METHOD("set_buffer_views", "buffer_views"), &FBXState::set_buffer_views);
-	ClassDB::bind_method(D_METHOD("get_accessors"), &FBXState::get_accessors);
-	ClassDB::bind_method(D_METHOD("set_accessors", "accessors"), &FBXState::set_accessors);
 	ClassDB::bind_method(D_METHOD("get_meshes"), &FBXState::get_meshes);
 	ClassDB::bind_method(D_METHOD("set_meshes", "meshes"), &FBXState::set_meshes);
 	ClassDB::bind_method(D_METHOD("get_animation_players_count", "idx"), &FBXState::get_animation_players_count);
@@ -70,14 +66,10 @@ void FBXState::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_root_nodes", "root_nodes"), &FBXState::set_root_nodes);
 	ClassDB::bind_method(D_METHOD("get_textures"), &FBXState::get_textures);
 	ClassDB::bind_method(D_METHOD("set_textures", "textures"), &FBXState::set_textures);
-	ClassDB::bind_method(D_METHOD("get_texture_samplers"), &FBXState::get_texture_samplers);
-	ClassDB::bind_method(D_METHOD("set_texture_samplers", "texture_samplers"), &FBXState::set_texture_samplers);
 	ClassDB::bind_method(D_METHOD("get_images"), &FBXState::get_images);
 	ClassDB::bind_method(D_METHOD("set_images", "images"), &FBXState::set_images);
 	ClassDB::bind_method(D_METHOD("get_skins"), &FBXState::get_skins);
 	ClassDB::bind_method(D_METHOD("set_skins", "skins"), &FBXState::set_skins);
-	ClassDB::bind_method(D_METHOD("get_cameras"), &FBXState::get_cameras);
-	ClassDB::bind_method(D_METHOD("set_cameras", "cameras"), &FBXState::set_cameras);
 	ClassDB::bind_method(D_METHOD("get_unique_names"), &FBXState::get_unique_names);
 	ClassDB::bind_method(D_METHOD("set_unique_names", "unique_names"), &FBXState::set_unique_names);
 	ClassDB::bind_method(D_METHOD("get_unique_animation_names"), &FBXState::get_unique_animation_names);
@@ -103,8 +95,6 @@ void FBXState::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_named_skin_binds"), "set_use_named_skin_binds", "get_use_named_skin_binds"); // bool
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_nodes", "get_nodes"); // Vector<Ref<FBXNode>>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "buffers"), "set_buffers", "get_buffers"); // Vector<Vector<uint8_t>
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "buffer_views", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_buffer_views", "get_buffer_views"); // Vector<Ref<FBXBufferView>>
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "accessors", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_accessors", "get_accessors"); // Vector<Ref<FBXAccessor>>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "meshes", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_meshes", "get_meshes"); // Vector<Ref<FBXMesh>>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "materials", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_materials", "get_materials"); // Vector<Ref<Material>
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "scene_name"), "set_scene_name", "get_scene_name"); // String
@@ -112,10 +102,8 @@ void FBXState::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "filename"), "set_filename", "get_filename"); // String
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_INT32_ARRAY, "root_nodes"), "set_root_nodes", "get_root_nodes"); // Vector<int>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "textures", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_textures", "get_textures"); // Vector<Ref<FBXTexture>>
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "texture_samplers", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_texture_samplers", "get_texture_samplers"); //Vector<Ref<FBXTextureSampler>>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "images", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_images", "get_images"); // Vector<Ref<Texture>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "skins", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_skins", "get_skins"); // Vector<Ref<FBXSkin>>
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "cameras", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_cameras", "get_cameras"); // Vector<Ref<FBXCamera>>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "unique_names", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_unique_names", "get_unique_names"); // Set<String>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "unique_animation_names", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_unique_animation_names", "get_unique_animation_names"); // Set<String>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "skeletons", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_INTERNAL | PROPERTY_USAGE_EDITOR), "set_skeletons", "get_skeletons"); // Vector<Ref<FBXSkeleton>>
@@ -204,22 +192,6 @@ void FBXState::set_buffers(TypedArray<PackedByteArray> p_buffers) {
 	FBXTemplateConvert::set_from_array(buffers, p_buffers);
 }
 
-TypedArray<FBXBufferView> FBXState::get_buffer_views() {
-	return FBXTemplateConvert::to_array(buffer_views);
-}
-
-void FBXState::set_buffer_views(TypedArray<FBXBufferView> p_buffer_views) {
-	FBXTemplateConvert::set_from_array(buffer_views, p_buffer_views);
-}
-
-TypedArray<FBXAccessor> FBXState::get_accessors() {
-	return FBXTemplateConvert::to_array(accessors);
-}
-
-void FBXState::set_accessors(TypedArray<FBXAccessor> p_accessors) {
-	FBXTemplateConvert::set_from_array(accessors, p_accessors);
-}
-
 TypedArray<FBXMesh> FBXState::get_meshes() {
 	return FBXTemplateConvert::to_array(meshes);
 }
@@ -260,14 +232,6 @@ void FBXState::set_textures(TypedArray<FBXTexture> p_textures) {
 	FBXTemplateConvert::set_from_array(textures, p_textures);
 }
 
-TypedArray<FBXTextureSampler> FBXState::get_texture_samplers() {
-	return FBXTemplateConvert::to_array(texture_samplers);
-}
-
-void FBXState::set_texture_samplers(TypedArray<FBXTextureSampler> p_texture_samplers) {
-	FBXTemplateConvert::set_from_array(texture_samplers, p_texture_samplers);
-}
-
 TypedArray<Texture2D> FBXState::get_images() {
 	return FBXTemplateConvert::to_array(images);
 }
@@ -282,14 +246,6 @@ TypedArray<FBXSkin> FBXState::get_skins() {
 
 void FBXState::set_skins(TypedArray<FBXSkin> p_skins) {
 	FBXTemplateConvert::set_from_array(skins, p_skins);
-}
-
-TypedArray<FBXCamera> FBXState::get_cameras() {
-	return FBXTemplateConvert::to_array(cameras);
-}
-
-void FBXState::set_cameras(TypedArray<FBXCamera> p_cameras) {
-	FBXTemplateConvert::set_from_array(cameras, p_cameras);
 }
 
 TypedArray<String> FBXState::get_unique_names() {

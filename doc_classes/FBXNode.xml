@@ -13,6 +13,11 @@
 			<description>
 			</description>
 		</method>
+		<method name="get_mesh">
+			<return type="int" />
+			<description>
+			</description>
+		</method>
 		<method name="set_additional_data">
 			<return type="void" />
 			<param index="0" name="extension_name" type="StringName" />
@@ -20,15 +25,17 @@
 			<description>
 			</description>
 		</method>
+		<method name="set_mesh">
+			<return type="void" />
+			<param index="0" name="mesh" type="int" />
+			<description>
+			</description>
+		</method>
 	</methods>
 	<members>
-		<member name="camera" type="int" setter="set_camera" getter="get_camera" default="-1">
-		</member>
 		<member name="children" type="PackedInt32Array" setter="set_children" getter="get_children" default="PackedInt32Array()">
 		</member>
 		<member name="height" type="int" setter="set_height" getter="get_height" default="-1">
-		</member>
-		<member name="mesh" type="int" setter="set_mesh" getter="get_mesh" default="-1">
 		</member>
 		<member name="parent" type="int" setter="set_parent" getter="get_parent" default="-1">
 		</member>

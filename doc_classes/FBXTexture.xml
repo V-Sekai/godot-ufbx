@@ -7,8 +7,6 @@
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="sampler" type="int" setter="set_sampler" getter="get_sampler" default="-1">
-		</member>
 		<member name="src_image" type="int" setter="set_src_image" getter="get_src_image" default="-1">
 		</member>
 	</members>

@@ -14,11 +14,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="get_accessors">
-			<return type="FBXAccessor[]" />
-			<description>
-			</description>
-		</method>
 		<method name="get_additional_data">
 			<return type="Variant" />
 			<param index="0" name="extension_name" type="StringName" />
@@ -39,16 +34,6 @@
 		</method>
 		<method name="get_animations">
 			<return type="FBXAnimation[]" />
-			<description>
-			</description>
-		</method>
-		<method name="get_buffer_views">
-			<return type="FBXBufferView[]" />
-			<description>
-			</description>
-		</method>
-		<method name="get_cameras">
-			<return type="FBXCamera[]" />
 			<description>
 			</description>
 		</method>
@@ -99,11 +84,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="get_texture_samplers">
-			<return type="FBXTextureSampler[]" />
-			<description>
-			</description>
-		</method>
 		<method name="get_textures">
 			<return type="FBXTexture[]" />
 			<description>
@@ -119,12 +99,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="set_accessors">
-			<return type="void" />
-			<param index="0" name="accessors" type="FBXAccessor[]" />
-			<description>
-			</description>
-		</method>
 		<method name="set_additional_data">
 			<return type="void" />
 			<param index="0" name="extension_name" type="StringName" />
@@ -135,18 +109,6 @@
 		<method name="set_animations">
 			<return type="void" />
 			<param index="0" name="animations" type="FBXAnimation[]" />
-			<description>
-			</description>
-		</method>
-		<method name="set_buffer_views">
-			<return type="void" />
-			<param index="0" name="buffer_views" type="FBXBufferView[]" />
-			<description>
-			</description>
-		</method>
-		<method name="set_cameras">
-			<return type="void" />
-			<param index="0" name="cameras" type="FBXCamera[]" />
 			<description>
 			</description>
 		</method>
@@ -189,12 +151,6 @@
 		<method name="set_skins">
 			<return type="void" />
 			<param index="0" name="skins" type="FBXSkin[]" />
-			<description>
-			</description>
-		</method>
-		<method name="set_texture_samplers">
-			<return type="void" />
-			<param index="0" name="texture_samplers" type="FBXTextureSampler[]" />
 			<description>
 			</description>
 		</method>

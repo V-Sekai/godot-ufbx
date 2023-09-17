@@ -33,8 +33,6 @@
 void FBXTexture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_src_image"), &FBXTexture::get_src_image);
 	ClassDB::bind_method(D_METHOD("set_src_image", "src_image"), &FBXTexture::set_src_image);
-	ClassDB::bind_method(D_METHOD("get_sampler"), &FBXTexture::get_sampler);
-	ClassDB::bind_method(D_METHOD("set_sampler", "sampler"), &FBXTexture::set_sampler);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "src_image"), "set_src_image", "get_src_image"); // int
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "sampler"), "set_sampler", "get_sampler"); // int
@@ -46,12 +44,4 @@ FBXImageIndex FBXTexture::get_src_image() const {
 
 void FBXTexture::set_src_image(FBXImageIndex val) {
 	src_image = val;
-}
-
-FBXTextureSamplerIndex FBXTexture::get_sampler() const {
-	return sampler;
-}
-
-void FBXTexture::set_sampler(FBXTextureSamplerIndex val) {
-	sampler = val;
 }

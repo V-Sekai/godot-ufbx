@@ -8,10 +8,7 @@ def configure(env):
 
 def get_doc_classes():
     return [
-        "FBXAccessor",
         "FBXAnimation",
-        "FBXBufferView",
-        "FBXCamera",
         "FBXDocument",
         "FBXDocumentExtension",
         "FBXMesh",
@@ -20,7 +17,6 @@ def get_doc_classes():
         "FBXSkin",
         "FBXState",
         "FBXTexture",
-        "FBXTextureSampler",
         "EditorSceneFormatImporterUFBX",
     ]
 
