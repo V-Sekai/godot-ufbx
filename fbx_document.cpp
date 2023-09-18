@@ -2927,6 +2927,10 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
 	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
+	if (p_state->discard_meshes_and_materials) {
+		opts.ignore_geometry = true;
+		opts.ignore_embedded = true;
+	}
 	opts.generate_missing_normals = true;
 
 	ufbx_error error;
