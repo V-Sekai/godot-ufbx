@@ -49,5 +49,25 @@ HashMap<int, FBXAnimation::Track> &FBXAnimation::get_tracks() {
 	return tracks;
 }
 
+double FBXAnimation::get_time_begin() const {
+	return time_begin;
+}
+
+void FBXAnimation::set_time_begin(double p_val) {
+	time_begin = p_val;
+}
+
+double FBXAnimation::get_time_end() const {
+	return time_end;
+}
+
+void FBXAnimation::set_time_end(double p_val) {
+	time_end = p_val;
+}
+
+HashMap<int, FBXAnimation::BlendShapeTrack> &FBXAnimation::get_blend_tracks() {
+	return blend_tracks;
+}
+
 FBXAnimation::FBXAnimation() {
 }

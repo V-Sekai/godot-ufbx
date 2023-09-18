@@ -35,7 +35,6 @@ void FBXTexture::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_src_image", "src_image"), &FBXTexture::set_src_image);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "src_image"), "set_src_image", "get_src_image"); // int
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "sampler"), "set_sampler", "get_sampler"); // int
 }
 
 FBXImageIndex FBXTexture::get_src_image() const {

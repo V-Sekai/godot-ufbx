@@ -45,7 +45,7 @@ class FBXState : public Resource {
 	friend class FBXDocument;
 
 	// Smart pointer that holds the loaded scene.
-	ufbx_scene_ref scene;
+	ufbx_unique_ptr<ufbx_scene> scene;
 
 	String base_path;
 	String filename;

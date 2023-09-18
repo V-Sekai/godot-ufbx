@@ -58,18 +58,29 @@ public:
 		Channel<Vector3> position_track;
 		Channel<Quaternion> rotation_track;
 		Channel<Vector3> scale_track;
-		Vector<Channel<real_t>> weight_tracks;
+	};
+
+	struct BlendShapeTrack {
+		Channel<real_t> weight_track;
 	};
 
 public:
 	bool get_loop() const;
 	void set_loop(bool p_val);
+	double get_time_begin() const;
+	void set_time_begin(double p_val);
+	double get_time_end() const;
+	void set_time_end(double p_val);
 	HashMap<int, FBXAnimation::Track> &get_tracks();
+	HashMap<int, BlendShapeTrack> &get_blend_tracks();
 	FBXAnimation();
 
 private:
 	bool loop = false;
+	double time_begin = 0.0;
+	double time_end = 0.0;
 	HashMap<int, Track> tracks;
+	HashMap<int, BlendShapeTrack> blend_tracks;
 };
 
 #endif // FBX_ANIMATION_H
