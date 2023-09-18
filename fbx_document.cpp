@@ -1915,9 +1915,9 @@ Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 		animation->set_time_begin(fbx_anim_stack->time_begin);
 		animation->set_time_end(fbx_anim_stack->time_end);
 
-		ufbx_bake_opts opts = { };
+		ufbx_bake_opts opts = {};
 		ufbx_error error;
-		ufbx_unique_ptr<ufbx_baked_anim> fbx_baked_anim { ufbx_bake_anim(fbx_scene, fbx_anim_stack->anim, &opts, &error) };
+		ufbx_unique_ptr<ufbx_baked_anim> fbx_baked_anim{ ufbx_bake_anim(fbx_scene, fbx_anim_stack->anim, &opts, &error) };
 		if (!fbx_baked_anim) {
 			char err_buf[512];
 			ufbx_format_error(err_buf, sizeof(err_buf), &error);
@@ -2653,7 +2653,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 			int scale_idx = -1;
 
 			if (track.position_track.values.size()) {
-				bool is_default = true; // Discard the track if all it contains is default values. 
+				bool is_default = true; // Discard the track if all it contains is default values.
 				if (p_remove_immutable_tracks) {
 					Vector3 base_pos = p_state->nodes[track_i.key]->position;
 					for (int i = 0; i < track.position_track.times.size(); i++) {
@@ -2740,7 +2740,6 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 				}
 			}
 		}
-
 	}
 
 	for (FBXNodeIndex node_index = 0; node_index < p_state->nodes.size(); node_index++) {

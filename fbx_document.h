@@ -106,6 +106,7 @@ private:
 	Camera3D *_generate_camera(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	Node3D *_generate_spatial(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	void _assign_node_names(Ref<FBXState> p_state);
+
 public:
 	Error append_from_file(String p_path, Ref<FBXState> p_state, uint32_t p_flags = 0, String p_base_path = String());
 	Error append_from_buffer(PackedByteArray p_bytes, String p_base_path, Ref<FBXState> p_state, uint32_t p_flags = 0);
