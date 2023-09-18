@@ -23136,7 +23136,6 @@ ufbxi_nodiscard static ufbxi_noinline bool ufbxi_in_list(const char *const *item
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_finalize_bake_times(ufbxi_bake_context *bc, ufbxi_double_list *p_dst)
 {
-	const ufbx_anim *anim = bc->anim;
 	if (bc->layer_weight_times.count > 0) {
 		ufbxi_check_err(&bc->error, ufbxi_push_copy(&bc->tmp_times, double, bc->layer_weight_times.count, bc->layer_weight_times.data));
 	}

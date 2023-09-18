@@ -106,16 +106,6 @@ private:
 	Camera3D *_generate_camera(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	Node3D *_generate_spatial(Ref<FBXState> p_state, const FBXNodeIndex p_node_index);
 	void _assign_node_names(Ref<FBXState> p_state);
-	template <class T>
-	T _interpolate_track(const Vector<real_t> &p_times, const Vector<T> &p_values,
-			const float p_time,
-			const FBXAnimation::Interpolation p_interp);
-	FBXAnimation::Track _convert_animation_track(Ref<FBXState> p_state,
-			FBXAnimation::Track p_track,
-			Ref<Animation> p_animation,
-			int32_t p_track_i,
-			FBXNodeIndex p_node_i);
-
 public:
 	Error append_from_file(String p_path, Ref<FBXState> p_state, uint32_t p_flags = 0, String p_base_path = String());
 	Error append_from_buffer(PackedByteArray p_bytes, String p_base_path, Ref<FBXState> p_state, uint32_t p_flags = 0);
@@ -180,7 +170,6 @@ public:
 			Ref<FBXNode> p_gltf_node);
 	FBXMeshIndex _convert_mesh_to_fbx(Ref<FBXState> p_state,
 			MeshInstance3D *p_mesh_instance);
-	void _convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, String p_animation_track_name);
 	Error _parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file);
 };
 

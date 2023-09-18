@@ -136,10 +136,6 @@ static Vector3 _as_vec3(const ufbx_vec3 &p_vector) {
 	return Vector3(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z));
 }
 
-// static Vector4 _as_vec4(const ufbx_vec4 &p_vector) {
-// 	return Vector4(real_t(p_vector.x), real_t(p_vector.y), real_t(p_vector.z), real_t(p_vector.w));
-// }
-
 static Transform3D _as_xform(const ufbx_matrix &p_mat) {
 	Transform3D xform;
 	xform.basis.set_column(Vector3::AXIS_X, _as_vec3(p_mat.cols[0]));
@@ -2602,77 +2598,6 @@ struct SceneFormatImporterGLTFInterpolate<Quaternion> {
 	}
 };
 
-template <class T>
-T FBXDocument::_interpolate_track(const Vector<real_t> &p_times, const Vector<T> &p_values, const float p_time, const FBXAnimation::Interpolation p_interp) {
-	ERR_FAIL_COND_V(!p_values.size(), T());
-	if (p_times.size() != (p_values.size() / (p_interp == FBXAnimation::INTERP_CUBIC_SPLINE ? 3 : 1))) {
-		ERR_PRINT_ONCE("The interpolated values are not corresponding to its times.");
-		return p_values[0];
-	}
-	//could use binary search, worth it?
-	int idx = -1;
-	for (int i = 0; i < p_times.size(); i++) {
-		if (p_times[i] > p_time) {
-			break;
-		}
-		idx++;
-	}
-
-	SceneFormatImporterGLTFInterpolate<T> interp;
-
-	switch (p_interp) {
-		case FBXAnimation::INTERP_LINEAR: {
-			if (idx == -1) {
-				return p_values[0];
-			} else if (idx >= p_times.size() - 1) {
-				return p_values[p_times.size() - 1];
-			}
-
-			const float c = (p_time - p_times[idx]) / (p_times[idx + 1] - p_times[idx]);
-
-			return interp.lerp(p_values[idx], p_values[idx + 1], c);
-		} break;
-		case FBXAnimation::INTERP_STEP: {
-			if (idx == -1) {
-				return p_values[0];
-			} else if (idx >= p_times.size() - 1) {
-				return p_values[p_times.size() - 1];
-			}
-
-			return p_values[idx];
-		} break;
-		case FBXAnimation::INTERP_CATMULLROMSPLINE: {
-			if (idx == -1) {
-				return p_values[1];
-			} else if (idx >= p_times.size() - 1) {
-				return p_values[1 + p_times.size() - 1];
-			}
-
-			const float c = (p_time - p_times[idx]) / (p_times[idx + 1] - p_times[idx]);
-
-			return interp.catmull_rom(p_values[idx - 1], p_values[idx], p_values[idx + 1], p_values[idx + 3], c);
-		} break;
-		case FBXAnimation::INTERP_CUBIC_SPLINE: {
-			if (idx == -1) {
-				return p_values[1];
-			} else if (idx >= p_times.size() - 1) {
-				return p_values[(p_times.size() - 1) * 3 + 1];
-			}
-
-			const float c = (p_time - p_times[idx]) / (p_times[idx + 1] - p_times[idx]);
-
-			const T from = p_values[idx * 3 + 1];
-			const T c1 = from + p_values[idx * 3 + 2];
-			const T to = p_values[idx * 3 + 4];
-			const T c2 = to + p_values[idx * 3 + 3];
-
-			return interp.bezier(from, c1, c2, to, c);
-		} break;
-	}
-
-	ERR_FAIL_V(p_values[0]);
-}
-
 void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, const FBXAnimationIndex p_index, const float p_bake_fps, const bool p_trimming, const bool p_remove_immutable_tracks) {
 	Ref<FBXAnimation> anim = p_state->animations[p_index];
 
@@ -2721,14 +2646,14 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		// Animated TRS properties will not affect a skinned mesh.
 		const bool transform_affects_skinned_mesh_instance = fbx_node->skeleton < 0 && fbx_node->skin >= 0;
 		if ((track.rotation_track.values.size() || track.position_track.values.size() || track.scale_track.values.size()) && !transform_affects_skinned_mesh_instance) {
-			//make transform track
+			// Make a transform track.
 			int base_idx = animation->get_track_count();
 			int position_idx = -1;
 			int rotation_idx = -1;
 			int scale_idx = -1;
 
 			if (track.position_track.values.size()) {
-				bool is_default = true; //discard the track if all it contains is default values
+				bool is_default = true; // Discard the track if all it contains is default values. 
 				if (p_remove_immutable_tracks) {
 					Vector3 base_pos = p_state->nodes[track_i.key]->position;
 					for (int i = 0; i < track.position_track.times.size(); i++) {
@@ -2743,12 +2668,12 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 					position_idx = base_idx;
 					animation->add_track(Animation::TYPE_POSITION_3D);
 					animation->track_set_path(position_idx, transform_node_path);
-					animation->track_set_imported(position_idx, true); //helps merging later
+					animation->track_set_imported(position_idx, true); // Helps merging positions later.
 					base_idx++;
 				}
 			}
 			if (track.rotation_track.values.size()) {
-				bool is_default = true; //discard the track if all it contains is default values
+				bool is_default = true; // Discard the track if all the track contains is the default values.
 				if (p_remove_immutable_tracks) {
 					Quaternion base_rot = p_state->nodes[track_i.key]->rotation.normalized();
 					for (int i = 0; i < track.rotation_track.times.size(); i++) {
@@ -2768,7 +2693,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 				}
 			}
 			if (track.scale_track.values.size()) {
-				bool is_default = true; //discard the track if all it contains is default values
+				bool is_default = true; // Discard the track if all the track contains is the default values.
 				if (p_remove_immutable_tracks) {
 					Vector3 base_scale = p_state->nodes[track_i.key]->scale;
 					for (int i = 0; i < track.scale_track.times.size(); i++) {
@@ -2824,7 +2749,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 			continue;
 		}
 
-		//for meshes, especially skinned meshes, there are cases where it will be added as a child
+		// For meshes, especially skinned meshes, there are cases where it will be added as a child.
 		NodePath mesh_instance_node_path;
 
 		Node *root = p_animation_player->get_parent();
@@ -2853,7 +2778,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 				const int track_idx = animation->get_track_count();
 				animation->add_track(Animation::TYPE_BLEND_SHAPE);
 				animation->track_set_path(track_idx, blend_path);
-				animation->track_set_imported(track_idx, true); //helps merging later
+				animation->track_set_imported(track_idx, true); // Helps merging later.
 
 				animation->track_set_interpolation_type(track_idx, Animation::INTERPOLATION_LINEAR);
 				for (int j = 0; j < blend_track->weight_track.times.size(); j++) {
@@ -2936,7 +2861,6 @@ void FBXDocument::_convert_mesh_instances(Ref<FBXState> p_state) {
 				gltf_skin->set_name(skin->get_name());
 				gltf_skin->skeleton = skeleton_gltf_i;
 				gltf_skin->skin_root = root_gltf_i;
-				//gltf_state->godot_to_gltf_node[skel_node]
 				HashMap<StringName, int> bone_name_to_idx;
 				for (int bone_i = 0; bone_i < bone_cnt; bone_i++) {
 					bone_name_to_idx[godot_skeleton->get_bone_name(bone_i)] = bone_i;
@@ -3006,515 +2930,6 @@ void FBXDocument::_process_mesh_instances(Ref<FBXState> p_state, Node *p_scene_r
 	}
 }
 
-FBXAnimation::Track FBXDocument::_convert_animation_track(Ref<FBXState> p_state, FBXAnimation::Track p_track, Ref<Animation> p_animation, int32_t p_track_i, FBXNodeIndex p_node_i) {
-	Animation::InterpolationType interpolation = p_animation->track_get_interpolation_type(p_track_i);
-
-	FBXAnimation::Interpolation gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-	if (interpolation == Animation::InterpolationType::INTERPOLATION_LINEAR) {
-		gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-	} else if (interpolation == Animation::InterpolationType::INTERPOLATION_NEAREST) {
-		gltf_interpolation = FBXAnimation::INTERP_STEP;
-	} else if (interpolation == Animation::InterpolationType::INTERPOLATION_CUBIC) {
-		gltf_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
-	}
-	Animation::TrackType track_type = p_animation->track_get_type(p_track_i);
-	int32_t key_count = p_animation->track_get_key_count(p_track_i);
-	Vector<real_t> times;
-	times.resize(key_count);
-	String path = p_animation->track_get_path(p_track_i);
-	for (int32_t key_i = 0; key_i < key_count; key_i++) {
-		times.write[key_i] = p_animation->track_get_key_time(p_track_i, key_i);
-	}
-	double anim_end = p_animation->get_length();
-	if (track_type == Animation::TYPE_SCALE_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-			p_track.scale_track.times.clear();
-			p_track.scale_track.values.clear();
-			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-			const double increment = 1.0 / BAKE_FPS;
-			double time = 0.0;
-			bool last = false;
-			while (true) {
-				Vector3 scale;
-				Error err = p_animation->try_scale_track_interpolate(p_track_i, time, &scale);
-				ERR_CONTINUE(err != OK);
-				p_track.scale_track.values.push_back(scale);
-				p_track.scale_track.times.push_back(time);
-				if (last) {
-					break;
-				}
-				time += increment;
-				if (time >= anim_end) {
-					last = true;
-					time = anim_end;
-				}
-			}
-		} else {
-			p_track.scale_track.times = times;
-			p_track.scale_track.interpolation = gltf_interpolation;
-			p_track.scale_track.values.resize(key_count);
-			for (int32_t key_i = 0; key_i < key_count; key_i++) {
-				Vector3 scale;
-				Error err = p_animation->scale_track_get_key(p_track_i, key_i, &scale);
-				ERR_CONTINUE(err != OK);
-				p_track.scale_track.values.write[key_i] = scale;
-			}
-		}
-	} else if (track_type == Animation::TYPE_POSITION_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-			p_track.position_track.times.clear();
-			p_track.position_track.values.clear();
-			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-			const double increment = 1.0 / BAKE_FPS;
-			double time = 0.0;
-			bool last = false;
-			while (true) {
-				Vector3 scale;
-				Error err = p_animation->try_position_track_interpolate(p_track_i, time, &scale);
-				ERR_CONTINUE(err != OK);
-				p_track.position_track.values.push_back(scale);
-				p_track.position_track.times.push_back(time);
-				if (last) {
-					break;
-				}
-				time += increment;
-				if (time >= anim_end) {
-					last = true;
-					time = anim_end;
-				}
-			}
-		} else {
-			p_track.position_track.times = times;
-			p_track.position_track.values.resize(key_count);
-			p_track.position_track.interpolation = gltf_interpolation;
-			for (int32_t key_i = 0; key_i < key_count; key_i++) {
-				Vector3 position;
-				Error err = p_animation->position_track_get_key(p_track_i, key_i, &position);
-				ERR_CONTINUE(err != OK);
-				p_track.position_track.values.write[key_i] = position;
-			}
-		}
-	} else if (track_type == Animation::TYPE_ROTATION_3D) {
-		if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-			gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-			p_track.rotation_track.times.clear();
-			p_track.rotation_track.values.clear();
-			// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-			const double increment = 1.0 / BAKE_FPS;
-			double time = 0.0;
-			bool last = false;
-			while (true) {
-				Quaternion rotation;
-				Error err = p_animation->try_rotation_track_interpolate(p_track_i, time, &rotation);
-				ERR_CONTINUE(err != OK);
-				p_track.rotation_track.values.push_back(rotation);
-				p_track.rotation_track.times.push_back(time);
-				if (last) {
-					break;
-				}
-				time += increment;
-				if (time >= anim_end) {
-					last = true;
-					time = anim_end;
-				}
-			}
-		} else {
-			p_track.rotation_track.times = times;
-			p_track.rotation_track.values.resize(key_count);
-			p_track.rotation_track.interpolation = gltf_interpolation;
-			for (int32_t key_i = 0; key_i < key_count; key_i++) {
-				Quaternion rotation;
-				Error err = p_animation->rotation_track_get_key(p_track_i, key_i, &rotation);
-				ERR_CONTINUE(err != OK);
-				p_track.rotation_track.values.write[key_i] = rotation;
-			}
-		}
-	} else if (track_type == Animation::TYPE_VALUE) {
-		if (path.contains(":position")) {
-			p_track.position_track.interpolation = gltf_interpolation;
-			p_track.position_track.times = times;
-			p_track.position_track.values.resize(key_count);
-
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-				p_track.position_track.times.clear();
-				p_track.position_track.values.clear();
-				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-				const double increment = 1.0 / BAKE_FPS;
-				double time = 0.0;
-				bool last = false;
-				while (true) {
-					Vector3 position;
-					Error err = p_animation->try_position_track_interpolate(p_track_i, time, &position);
-					ERR_CONTINUE(err != OK);
-					p_track.position_track.values.push_back(position);
-					p_track.position_track.times.push_back(time);
-					if (last) {
-						break;
-					}
-					time += increment;
-					if (time >= anim_end) {
-						last = true;
-						time = anim_end;
-					}
-				}
-			} else {
-				for (int32_t key_i = 0; key_i < key_count; key_i++) {
-					Vector3 position = p_animation->track_get_key_value(p_track_i, key_i);
-					p_track.position_track.values.write[key_i] = position;
-				}
-			}
-		} else if (path.contains(":rotation")) {
-			p_track.rotation_track.interpolation = gltf_interpolation;
-			p_track.rotation_track.times = times;
-			p_track.rotation_track.values.resize(key_count);
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-				p_track.rotation_track.times.clear();
-				p_track.rotation_track.values.clear();
-				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-				const double increment = 1.0 / BAKE_FPS;
-				double time = 0.0;
-				bool last = false;
-				while (true) {
-					Quaternion rotation;
-					Error err = p_animation->try_rotation_track_interpolate(p_track_i, time, &rotation);
-					ERR_CONTINUE(err != OK);
-					p_track.rotation_track.values.push_back(rotation);
-					p_track.rotation_track.times.push_back(time);
-					if (last) {
-						break;
-					}
-					time += increment;
-					if (time >= anim_end) {
-						last = true;
-						time = anim_end;
-					}
-				}
-			} else {
-				for (int32_t key_i = 0; key_i < key_count; key_i++) {
-					Vector3 rotation_radian = p_animation->track_get_key_value(p_track_i, key_i);
-					p_track.rotation_track.values.write[key_i] = Quaternion::from_euler(rotation_radian);
-				}
-			}
-		} else if (path.contains(":scale")) {
-			p_track.scale_track.times = times;
-			p_track.scale_track.interpolation = gltf_interpolation;
-
-			p_track.scale_track.values.resize(key_count);
-			p_track.scale_track.interpolation = gltf_interpolation;
-
-			if (gltf_interpolation == FBXAnimation::INTERP_CUBIC_SPLINE) {
-				gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-				p_track.scale_track.times.clear();
-				p_track.scale_track.values.clear();
-				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-				const double increment = 1.0 / BAKE_FPS;
-				double time = 0.0;
-				bool last = false;
-				while (true) {
-					Vector3 scale;
-					Error err = p_animation->try_scale_track_interpolate(p_track_i, time, &scale);
-					ERR_CONTINUE(err != OK);
-					p_track.scale_track.values.push_back(scale);
-					p_track.scale_track.times.push_back(time);
-					if (last) {
-						break;
-					}
-					time += increment;
-					if (time >= anim_end) {
-						last = true;
-						time = anim_end;
-					}
-				}
-			} else {
-				for (int32_t key_i = 0; key_i < key_count; key_i++) {
-					Vector3 scale_track = p_animation->track_get_key_value(p_track_i, key_i);
-					p_track.scale_track.values.write[key_i] = scale_track;
-				}
-			}
-		}
-	} else if (track_type == Animation::TYPE_BEZIER) {
-		const int32_t keys = anim_end * BAKE_FPS;
-		if (path.contains(":scale")) {
-			if (!p_track.scale_track.times.size()) {
-				p_track.scale_track.interpolation = gltf_interpolation;
-				Vector<real_t> new_times;
-				new_times.resize(keys);
-				for (int32_t key_i = 0; key_i < keys; key_i++) {
-					new_times.write[key_i] = key_i / BAKE_FPS;
-				}
-				p_track.scale_track.times = new_times;
-
-				p_track.scale_track.values.resize(keys);
-
-				for (int32_t key_i = 0; key_i < keys; key_i++) {
-					p_track.scale_track.values.write[key_i] = Vector3(1.0f, 1.0f, 1.0f);
-				}
-
-				for (int32_t key_i = 0; key_i < keys; key_i++) {
-					Vector3 bezier_track = p_track.scale_track.values[key_i];
-					if (path.contains(":scale:x")) {
-						bezier_track.x = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-					} else if (path.contains(":scale:y")) {
-						bezier_track.y = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-					} else if (path.contains(":scale:z")) {
-						bezier_track.z = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-					}
-					p_track.scale_track.values.write[key_i] = bezier_track;
-				}
-			}
-		} else if (path.contains(":position")) {
-			if (!p_track.position_track.times.size()) {
-				p_track.position_track.interpolation = gltf_interpolation;
-				Vector<real_t> new_times;
-				new_times.resize(keys);
-				for (int32_t key_i = 0; key_i < keys; key_i++) {
-					new_times.write[key_i] = key_i / BAKE_FPS;
-				}
-				p_track.position_track.times = new_times;
-
-				p_track.position_track.values.resize(keys);
-			}
-
-			for (int32_t key_i = 0; key_i < keys; key_i++) {
-				Vector3 bezier_track = p_track.position_track.values[key_i];
-				if (path.contains(":position:x")) {
-					bezier_track.x = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				} else if (path.contains(":position:y")) {
-					bezier_track.y = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				} else if (path.contains(":position:z")) {
-					bezier_track.z = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				}
-				p_track.position_track.values.write[key_i] = bezier_track;
-			}
-		} else if (path.contains(":rotation")) {
-			if (!p_track.rotation_track.times.size()) {
-				p_track.rotation_track.interpolation = gltf_interpolation;
-				Vector<real_t> new_times;
-				new_times.resize(keys);
-				for (int32_t key_i = 0; key_i < keys; key_i++) {
-					new_times.write[key_i] = key_i / BAKE_FPS;
-				}
-				p_track.rotation_track.times = new_times;
-
-				p_track.rotation_track.values.resize(keys);
-			}
-			for (int32_t key_i = 0; key_i < keys; key_i++) {
-				Quaternion bezier_track = p_track.rotation_track.values[key_i];
-				if (path.contains(":rotation:x")) {
-					bezier_track.x = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				} else if (path.contains(":rotation:y")) {
-					bezier_track.y = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				} else if (path.contains(":rotation:z")) {
-					bezier_track.z = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				} else if (path.contains(":rotation:w")) {
-					bezier_track.w = p_animation->bezier_track_interpolate(p_track_i, key_i / BAKE_FPS);
-				}
-				p_track.rotation_track.values.write[key_i] = bezier_track;
-			}
-		}
-	}
-	return p_track;
-}
-
-void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player, String p_animation_track_name) {
-	Ref<Animation> animation = p_animation_player->get_animation(p_animation_track_name);
-	Ref<FBXAnimation> gltf_animation;
-	gltf_animation.instantiate();
-	gltf_animation->set_name(_gen_unique_name(p_state, p_animation_track_name));
-	for (int32_t track_i = 0; track_i < animation->get_track_count(); track_i++) {
-		if (!animation->track_is_enabled(track_i)) {
-			continue;
-		}
-		String final_track_path = animation->track_get_path(track_i);
-		Node *animation_base_node = p_animation_player->get_parent();
-		ERR_CONTINUE_MSG(!animation_base_node, "Cannot get the parent of the animation player.");
-		if (String(final_track_path).contains(":position")) {
-			const Vector<String> node_suffix = String(final_track_path).split(":position");
-			const NodePath path = node_suffix[0];
-			const Node *node = animation_base_node->get_node_or_null(path);
-			ERR_CONTINUE_MSG(!node, "Cannot get the node from a position path.");
-			for (const KeyValue<FBXNodeIndex, Node *> &position_scene_node_i : p_state->scene_nodes) {
-				if (position_scene_node_i.value == node) {
-					FBXNodeIndex node_index = position_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator position_track_i = gltf_animation->get_tracks().find(node_index);
-					FBXAnimation::Track track;
-					if (position_track_i) {
-						track = position_track_i->value;
-					}
-					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
-				}
-			}
-		} else if (String(final_track_path).contains(":rotation_degrees")) {
-			const Vector<String> node_suffix = String(final_track_path).split(":rotation_degrees");
-			const NodePath path = node_suffix[0];
-			const Node *node = animation_base_node->get_node_or_null(path);
-			ERR_CONTINUE_MSG(!node, "Cannot get the node from a rotation degrees path.");
-			for (const KeyValue<FBXNodeIndex, Node *> &rotation_degree_scene_node_i : p_state->scene_nodes) {
-				if (rotation_degree_scene_node_i.value == node) {
-					FBXNodeIndex node_index = rotation_degree_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator rotation_degree_track_i = gltf_animation->get_tracks().find(node_index);
-					FBXAnimation::Track track;
-					if (rotation_degree_track_i) {
-						track = rotation_degree_track_i->value;
-					}
-					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
-				}
-			}
-		} else if (String(final_track_path).contains(":scale")) {
-			const Vector<String> node_suffix = String(final_track_path).split(":scale");
-			const NodePath path = node_suffix[0];
-			const Node *node = animation_base_node->get_node_or_null(path);
-			ERR_CONTINUE_MSG(!node, "Cannot get the node from a scale path.");
-			for (const KeyValue<FBXNodeIndex, Node *> &scale_scene_node_i : p_state->scene_nodes) {
-				if (scale_scene_node_i.value == node) {
-					FBXNodeIndex node_index = scale_scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator scale_track_i = gltf_animation->get_tracks().find(node_index);
-					FBXAnimation::Track track;
-					if (scale_track_i) {
-						track = scale_track_i->value;
-					}
-					track = _convert_animation_track(p_state, track, animation, track_i, node_index);
-					gltf_animation->get_tracks().insert(node_index, track);
-				}
-			}
-		} else if (String(final_track_path).contains(":transform")) {
-			const Vector<String> node_suffix = String(final_track_path).split(":transform");
-			const NodePath path = node_suffix[0];
-			const Node *node = animation_base_node->get_node_or_null(path);
-			ERR_CONTINUE_MSG(!node, "Cannot get the node from a transform path.");
-			for (const KeyValue<FBXNodeIndex, Node *> &transform_track_i : p_state->scene_nodes) {
-				if (transform_track_i.value == node) {
-					FBXAnimation::Track track;
-					track = _convert_animation_track(p_state, track, animation, track_i, transform_track_i.key);
-					gltf_animation->get_tracks().insert(transform_track_i.key, track);
-				}
-			}
-		} else if (String(final_track_path).contains(":") && animation->track_get_type(track_i) == Animation::TYPE_BLEND_SHAPE) {
-			const Vector<String> node_suffix = String(final_track_path).split(":");
-			const NodePath path = node_suffix[0];
-			const String suffix = node_suffix[1];
-			Node *node = animation_base_node->get_node_or_null(path);
-			ERR_CONTINUE_MSG(!node, "Cannot get the node from a blend shape path.");
-			MeshInstance3D *mi = cast_to<MeshInstance3D>(node);
-			if (!mi) {
-				continue;
-			}
-			Ref<Mesh> mesh = mi->get_mesh();
-			ERR_CONTINUE(mesh.is_null());
-			int32_t mesh_index = -1;
-			for (const KeyValue<FBXNodeIndex, Node *> &mesh_track_i : p_state->scene_nodes) {
-				if (mesh_track_i.value == node) {
-					mesh_index = mesh_track_i.key;
-				}
-			}
-			ERR_CONTINUE(mesh_index == -1);
-			HashMap<int, FBXAnimation::Track> &tracks = gltf_animation->get_tracks();
-			FBXAnimation::Track track = gltf_animation->get_tracks().has(mesh_index) ? gltf_animation->get_tracks()[mesh_index] : FBXAnimation::Track();
-			if (!tracks.has(mesh_index)) {
-				for (int32_t shape_i = 0; shape_i < mesh->get_blend_shape_count(); shape_i++) {
-					String shape_name = mesh->get_blend_shape_name(shape_i);
-					NodePath shape_path = String(path) + ":" + shape_name;
-					int32_t shape_track_i = animation->find_track(shape_path, Animation::TYPE_BLEND_SHAPE);
-					if (shape_track_i == -1) {
-						FBXAnimation::Channel<real_t> weight;
-						weight.interpolation = FBXAnimation::INTERP_LINEAR;
-						weight.times.push_back(0.0f);
-						weight.times.push_back(0.0f);
-						weight.values.push_back(0.0f);
-						weight.values.push_back(0.0f);
-						// track.weight_tracks.push_back(weight);
-						continue;
-					}
-					Animation::InterpolationType interpolation = animation->track_get_interpolation_type(track_i);
-					FBXAnimation::Interpolation gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-					if (interpolation == Animation::InterpolationType::INTERPOLATION_LINEAR) {
-						gltf_interpolation = FBXAnimation::INTERP_LINEAR;
-					} else if (interpolation == Animation::InterpolationType::INTERPOLATION_NEAREST) {
-						gltf_interpolation = FBXAnimation::INTERP_STEP;
-					} else if (interpolation == Animation::InterpolationType::INTERPOLATION_CUBIC) {
-						gltf_interpolation = FBXAnimation::INTERP_CUBIC_SPLINE;
-					}
-					int32_t key_count = animation->track_get_key_count(shape_track_i);
-					FBXAnimation::Channel<real_t> weight;
-					weight.interpolation = gltf_interpolation;
-					weight.times.resize(key_count);
-					for (int32_t time_i = 0; time_i < key_count; time_i++) {
-						weight.times.write[time_i] = animation->track_get_key_time(shape_track_i, time_i);
-					}
-					weight.values.resize(key_count);
-					for (int32_t value_i = 0; value_i < key_count; value_i++) {
-						weight.values.write[value_i] = animation->track_get_key_value(shape_track_i, value_i);
-					}
-					// track.weight_tracks.push_back(weight);
-				}
-				tracks[mesh_index] = track;
-			}
-		} else if (String(final_track_path).contains(":")) {
-			//Process skeleton
-			const Vector<String> node_suffix = String(final_track_path).split(":");
-			const String node = node_suffix[0];
-			const NodePath node_path = node;
-			const String suffix = node_suffix[1];
-			Node *godot_node = animation_base_node->get_node_or_null(node_path);
-			if (!godot_node) {
-				continue;
-			}
-			Skeleton3D *skeleton = cast_to<Skeleton3D>(animation_base_node->get_node_or_null(node));
-			if (!skeleton) {
-				continue;
-			}
-			FBXSkeletonIndex skeleton_gltf_i = -1;
-			for (FBXSkeletonIndex skeleton_i = 0; skeleton_i < p_state->skeletons.size(); skeleton_i++) {
-				if (p_state->skeletons[skeleton_i]->godot_skeleton == cast_to<Skeleton3D>(godot_node)) {
-					skeleton = p_state->skeletons[skeleton_i]->godot_skeleton;
-					skeleton_gltf_i = skeleton_i;
-					ERR_CONTINUE(!skeleton);
-					Ref<FBXSkeleton> skeleton_gltf = p_state->skeletons[skeleton_gltf_i];
-					int32_t bone = skeleton->find_bone(suffix);
-					ERR_CONTINUE_MSG(bone == -1, vformat("Cannot find the bone %s.", suffix));
-					if (!skeleton_gltf->godot_bone_node.has(bone)) {
-						continue;
-					}
-					FBXNodeIndex node_i = skeleton_gltf->godot_bone_node[bone];
-					HashMap<int, FBXAnimation::Track>::Iterator property_track_i = gltf_animation->get_tracks().find(node_i);
-					FBXAnimation::Track track;
-					if (property_track_i) {
-						track = property_track_i->value;
-					}
-					track = _convert_animation_track(p_state, track, animation, track_i, node_i);
-					gltf_animation->get_tracks()[node_i] = track;
-				}
-			}
-		} else if (!String(final_track_path).contains(":")) {
-			ERR_CONTINUE(!animation_base_node);
-			Node *godot_node = animation_base_node->get_node_or_null(final_track_path);
-			ERR_CONTINUE_MSG(!godot_node, vformat("Cannot get the node from a skeleton path %s.", final_track_path));
-			for (const KeyValue<FBXNodeIndex, Node *> &scene_node_i : p_state->scene_nodes) {
-				if (scene_node_i.value == godot_node) {
-					FBXNodeIndex node_i = scene_node_i.key;
-					HashMap<int, FBXAnimation::Track>::Iterator node_track_i = gltf_animation->get_tracks().find(node_i);
-					FBXAnimation::Track track;
-					if (node_track_i) {
-						track = node_track_i->value;
-					}
-					track = _convert_animation_track(p_state, track, animation, track_i, node_i);
-					gltf_animation->get_tracks()[node_i] = track;
-					break;
-				}
-			}
-		}
-	}
-	if (gltf_animation->get_tracks().size()) {
-		p_state->animations.push_back(gltf_animation);
-	}
-}
-
 Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file) {
 	p_state->scene.reset();
 
@@ -3567,7 +2982,7 @@ void FBXDocument::_bind_methods() {
 }
 
 void FBXDocument::_build_parent_hierarchy(Ref<FBXState> p_state) {
-	// build the hierarchy
+	// Build the hierarchy.
 	for (FBXNodeIndex node_i = 0; node_i < p_state->nodes.size(); node_i++) {
 		for (int j = 0; j < p_state->nodes[node_i]->children.size(); j++) {
 			FBXNodeIndex child_i = p_state->nodes[node_i]->children[j];
