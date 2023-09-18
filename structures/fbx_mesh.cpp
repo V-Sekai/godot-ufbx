@@ -37,11 +37,14 @@ void FBXMesh::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_mesh", "mesh"), &FBXMesh::set_mesh);
 	ClassDB::bind_method(D_METHOD("get_blend_weights"), &FBXMesh::get_blend_weights);
 	ClassDB::bind_method(D_METHOD("set_blend_weights", "blend_weights"), &FBXMesh::set_blend_weights);
+	ClassDB::bind_method(D_METHOD("get_blend_channels"), &FBXMesh::get_blend_channels);
+	ClassDB::bind_method(D_METHOD("set_blend_channels", "blend_channels"), &FBXMesh::set_blend_channels);
 	ClassDB::bind_method(D_METHOD("get_instance_materials"), &FBXMesh::get_instance_materials);
 	ClassDB::bind_method(D_METHOD("set_instance_materials", "instance_materials"), &FBXMesh::set_instance_materials);
 
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh"), "set_mesh", "get_mesh");
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_FLOAT32_ARRAY, "blend_weights"), "set_blend_weights", "get_blend_weights"); // Vector<float>
+	ADD_PROPERTY(PropertyInfo(Variant::PACKED_INT32_ARRAY, "blend_channels"), "set_blend_channels", "get_blend_channels"); // Vector<float>
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "instance_materials"), "set_instance_materials", "get_instance_materials");
 }
 
@@ -67,4 +70,12 @@ Vector<float> FBXMesh::get_blend_weights() {
 
 void FBXMesh::set_blend_weights(Vector<float> p_blend_weights) {
 	blend_weights = p_blend_weights;
+}
+
+Vector<int> FBXMesh::get_blend_channels() {
+	return blend_channels;
+}
+
+void FBXMesh::set_blend_channels(Vector<int> p_blend_channels) {
+	blend_channels = p_blend_channels;
 }

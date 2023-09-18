@@ -472,18 +472,19 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 		}
 
 		Vector<float> blend_weights;
-		for (const ufbx_mesh_material &fbx_mesh_mat : fbx_mesh->materials) {
+		Vector<int> blend_channels;
+		for (const ufbx_mesh_part &fbx_mesh_part : fbx_mesh->material_parts) {
 			for (Mesh::PrimitiveType primitive : primitive_types) {
 				uint32_t num_indices = 0;
 				switch (primitive) {
 					case Mesh::PRIMITIVE_POINTS:
-						num_indices = fbx_mesh_mat.num_point_faces * 1;
+						num_indices = fbx_mesh_part.num_point_faces * 1;
 						break;
 					case Mesh::PRIMITIVE_LINES:
-						num_indices = fbx_mesh_mat.num_line_faces * 2;
+						num_indices = fbx_mesh_part.num_line_faces * 2;
 						break;
 					case Mesh::PRIMITIVE_TRIANGLES:
-						num_indices = fbx_mesh_mat.num_triangles * 3;
+						num_indices = fbx_mesh_part.num_triangles * 3;
 						break;
 					case Mesh::PRIMITIVE_TRIANGLE_STRIP:
 						// FIXME 2021-09-15 fire
@@ -503,7 +504,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 				indices.resize(num_indices);
 
 				uint32_t offset = 0;
-				for (uint32_t face_index : fbx_mesh_mat.face_indices) {
+				for (uint32_t face_index : fbx_mesh_part.face_indices) {
 					ufbx_face face = fbx_mesh->faces[face_index];
 					switch (primitive) {
 						case Mesh::PRIMITIVE_POINTS: {
@@ -759,6 +760,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 							}
 							import_mesh->add_blend_shape(bs_name);
 							blend_weights.push_back(float(fbx_channel->weight));
+							blend_channels.push_back(float(fbx_channel->typed_id));
 
 							Array array_copy;
 							array_copy.resize(Mesh::ARRAY_MAX);
@@ -841,8 +843,12 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 				Ref<Material> mat;
 				String mat_name;
 				if (!p_state->discard_meshes_and_materials) {
-					if (fbx_mesh_mat.material) {
-						const int material = int(fbx_mesh_mat.material->typed_id);
+					ufbx_material *fbx_material = nullptr;
+					if (fbx_mesh_part.index < fbx_mesh->materials.count) {
+						fbx_material = fbx_mesh->materials[fbx_mesh_part.index];
+					}
+					if (fbx_material) {
+						const int material = int(fbx_material->typed_id);
 						ERR_FAIL_INDEX_V(material, p_state->materials.size(), ERR_FILE_CORRUPT);
 						Ref<Material> mat3d = p_state->materials[material];
 						ERR_FAIL_NULL_V(mat3d, ERR_FILE_CORRUPT);
@@ -872,6 +878,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 		Ref<FBXMesh> mesh;
 		mesh.instantiate();
 		mesh->set_blend_weights(blend_weights);
+		mesh->set_blend_channels(blend_channels);
 		mesh->set_mesh(import_mesh);
 
 		p_state->meshes.push_back(mesh);
@@ -1909,108 +1916,54 @@ Error FBXDocument::_parse_animations(Ref<FBXState> p_state) {
 			animation->set_name(_gen_unique_animation_name(p_state, anim_name));
 		}
 
-		struct AnimTrack {
-			double min_time = DBL_MAX;
-			double max_time = -DBL_MAX;
-			bool is_valid() const {
-				return min_time <= max_time;
+		animation->set_time_begin(fbx_anim_stack->time_begin);
+		animation->set_time_end(fbx_anim_stack->time_end);
+
+		ufbx_bake_opts opts = { };
+		ufbx_error error;
+		ufbx_unique_ptr<ufbx_baked_anim> fbx_baked_anim { ufbx_bake_anim(fbx_scene, fbx_anim_stack->anim, &opts, &error) };
+		if (!fbx_baked_anim) {
+			char err_buf[512];
+			ufbx_format_error(err_buf, sizeof(err_buf), &error);
+			ERR_FAIL_V_MSG(FAILED, err_buf);
+		}
+
+		for (const ufbx_baked_node &fbx_baked_node : fbx_baked_anim->nodes) {
+			const FBXNodeIndex node = fbx_baked_node.typed_id;
+			FBXAnimation::Track &track = animation->get_tracks()[node];
+
+			for (const ufbx_baked_vec3 &key : fbx_baked_node.translation_keys) {
+				track.position_track.times.push_back(float(key.time));
+				track.position_track.values.push_back(_as_vec3(key.value));
 			}
-		};
 
-		struct AnimNode {
-			AnimTrack translation;
-			AnimTrack rotation;
-			AnimTrack scale;
-		};
+			for (const ufbx_baked_quat &key : fbx_baked_node.rotation_keys) {
+				track.rotation_track.times.push_back(float(key.time));
+				track.rotation_track.values.push_back(_as_quaternion(key.value));
+			}
 
-		HashMap<FBXNodeIndex, AnimNode> anim_nodes;
-
-		for (const ufbx_anim_layer *fbx_anim_layer : fbx_anim_stack->layers) {
-			for (const ufbx_anim_prop &fbx_anim_prop : fbx_anim_layer->anim_props) {
-				const ufbx_element *target = fbx_anim_prop.element;
-				if (target->type == UFBX_ELEMENT_NODE) {
-					String prop = _as_string(fbx_anim_prop.prop_name);
-					AnimTrack *track = nullptr;
-					if (prop == UFBX_Lcl_Translation) {
-						track = &anim_nodes[target->typed_id].translation;
-					} else if (prop == UFBX_Lcl_Rotation) {
-						track = &anim_nodes[target->typed_id].rotation;
-					} else if (prop == UFBX_Lcl_Scaling) {
-						track = &anim_nodes[target->typed_id].scale;
-					}
-
-					if (track) {
-						double min_time = DBL_MAX;
-						double max_time = -DBL_MAX;
-						for (ufbx_anim_curve *curve : fbx_anim_prop.anim_value->curves) {
-							if (!curve || curve->keyframes.count == 0) {
-								continue;
-							}
-
-							min_time = MIN(min_time, curve->keyframes[0].time);
-							max_time = MAX(max_time, curve->keyframes[curve->keyframes.count - 1].time);
-						}
-
-						track->min_time = MIN(track->min_time, min_time);
-						track->max_time = MAX(track->max_time, max_time);
-					}
-				}
+			for (const ufbx_baked_vec3 &key : fbx_baked_node.scale_keys) {
+				track.scale_track.times.push_back(float(key.time));
+				track.scale_track.values.push_back(_as_vec3(key.value));
 			}
 		}
 
-		const ufbx_anim *fbx_anim = &fbx_anim_stack->anim;
+		for (const ufbx_baked_element &fbx_baked_element : fbx_baked_anim->elements) {
+			const ufbx_element *fbx_element = fbx_scene->elements[fbx_baked_element.element_id];
 
-		// TODO: Could do more sophisticated detection here..
-		for (const KeyValue<FBXNodeIndex, AnimNode> &pair : anim_nodes) {
-			const FBXNodeIndex node = pair.key;
-			const AnimNode &anim_node = pair.value;
-			const ufbx_node *fbx_node = fbx_scene->nodes[pair.key];
+			for (const ufbx_baked_prop &fbx_baked_prop : fbx_baked_element.props) {
+				String prop_name = _as_string(fbx_baked_prop.name);
 
-			FBXAnimation::Track *track = nullptr;
-			if (!animation->get_tracks().has(node)) {
-				animation->get_tracks()[node] = FBXAnimation::Track();
-			}
+				if (fbx_element->type == UFBX_ELEMENT_BLEND_CHANNEL && prop_name == UFBX_DeformPercent) {
+					const ufbx_blend_channel *fbx_blend_channel = ufbx_as_blend_channel(fbx_element);
 
-			track = &animation->get_tracks()[node];
+					int blend_i = fbx_blend_channel->typed_id;
+					FBXAnimation::BlendShapeTrack &track = animation->get_blend_tracks()[blend_i];
 
-			const uint32_t max_keyframes = 4096; // TEMP
-
-			if (anim_node.translation.is_valid()) {
-				double duration = anim_node.translation.max_time - anim_node.translation.min_time;
-				uint32_t min_steps = anim_node.translation.max_time > anim_node.translation.min_time;
-				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
-				for (uint32_t i = 0; i < steps; i++) {
-					double t = anim_node.translation.min_time + duration * i / steps;
-					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
-					track->position_track.times.push_back(float(t));
-					track->position_track.values.push_back(_as_vec3(transform.translation));
-					track->position_track.interpolation = FBXAnimation::INTERP_LINEAR;
-				}
-			}
-
-			if (anim_node.rotation.is_valid()) {
-				double duration = anim_node.rotation.max_time - anim_node.rotation.min_time;
-				uint32_t min_steps = anim_node.rotation.max_time > anim_node.rotation.min_time;
-				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
-				for (uint32_t i = 0; i < steps; i++) {
-					double t = anim_node.rotation.min_time + duration * i / steps;
-					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
-					track->rotation_track.times.push_back(float(t));
-					track->rotation_track.values.push_back(_as_quaternion(transform.rotation));
-					track->rotation_track.interpolation = FBXAnimation::INTERP_LINEAR;
-				}
-			}
-
-			if (anim_node.scale.is_valid()) {
-				double duration = anim_node.scale.max_time - anim_node.scale.min_time;
-				uint32_t min_steps = anim_node.scale.max_time > anim_node.scale.min_time;
-				uint32_t steps = CLAMP(Math::ceil(duration * BAKE_FPS), min_steps, max_keyframes);
-				for (uint32_t i = 0; i < steps; i++) {
-					double t = anim_node.scale.min_time + duration * i / steps;
-					ufbx_transform transform = ufbx_evaluate_transform(fbx_anim, fbx_node, t);
-					track->scale_track.times.push_back(float(t));
-					track->scale_track.values.push_back(_as_vec3(transform.scale));
-					track->scale_track.interpolation = FBXAnimation::INTERP_LINEAR;
+					for (const ufbx_baked_vec3 &key : fbx_baked_prop.keys) {
+						track.weight_track.times.push_back(float(key.time));
+						track.weight_track.values.push_back(real_t(key.value.x / 100.0));
+					}
 				}
 			}
 		}
@@ -2737,8 +2690,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		animation->set_loop_mode(Animation::LOOP_LINEAR);
 	}
 
-	double anim_start = p_trimming ? INFINITY : 0.0;
-	double anim_end = 0.0;
+	double anim_start_offset = p_trimming ? anim->get_time_begin() : 0.0;
 
 	for (const KeyValue<int, FBXAnimation::Track> &track_i : anim->get_tracks()) {
 		const FBXAnimation::Track &track = track_i.value;
@@ -2746,24 +2698,14 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		NodePath node_path;
 		//for skeletons, transform tracks always affect bones
 		NodePath transform_node_path;
-		//for meshes, especially skinned meshes, there are cases where it will be added as a child
-		NodePath mesh_instance_node_path;
-
 		FBXNodeIndex node_index = track_i.key;
-
-		const Ref<FBXNode> fbx_node = p_state->nodes[track_i.key];
-
 		Node *root = p_animation_player->get_parent();
 		ERR_FAIL_COND(root == nullptr);
 		HashMap<FBXNodeIndex, Node *>::Iterator node_element = p_state->scene_nodes.find(node_index);
 		ERR_CONTINUE_MSG(!node_element, vformat("Unable to find node %d for animation.", node_index));
 		node_path = root->get_path_to(node_element->value);
-		HashMap<FBXNodeIndex, ImporterMeshInstance3D *>::Iterator mesh_instance_element = p_state->scene_mesh_instances.find(node_index);
-		if (mesh_instance_element) {
-			mesh_instance_node_path = root->get_path_to(mesh_instance_element->value);
-		} else {
-			mesh_instance_node_path = node_path;
-		}
+
+		const Ref<FBXNode> fbx_node = p_state->nodes[track_i.key];
 
 		if (fbx_node->skeleton >= 0) {
 			const Skeleton3D *sk = p_state->skeletons[fbx_node->skeleton]->godot_skeleton;
@@ -2774,43 +2716,6 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 			transform_node_path = path + ":" + bone;
 		} else {
 			transform_node_path = node_path;
-		}
-
-		if (p_trimming) {
-			for (int i = 0; i < track.rotation_track.times.size(); i++) {
-				anim_start = MIN(anim_start, track.rotation_track.times[i]);
-				anim_end = MAX(anim_end, track.rotation_track.times[i]);
-			}
-			for (int i = 0; i < track.position_track.times.size(); i++) {
-				anim_start = MIN(anim_start, track.position_track.times[i]);
-				anim_end = MAX(anim_end, track.position_track.times[i]);
-			}
-			for (int i = 0; i < track.scale_track.times.size(); i++) {
-				anim_start = MIN(anim_start, track.scale_track.times[i]);
-				anim_end = MAX(anim_end, track.scale_track.times[i]);
-			}
-			for (int i = 0; i < track.weight_tracks.size(); i++) {
-				for (int j = 0; j < track.weight_tracks[i].times.size(); j++) {
-					anim_start = MIN(anim_start, track.weight_tracks[i].times[j]);
-					anim_end = MAX(anim_end, track.weight_tracks[i].times[j]);
-				}
-			}
-		} else {
-			// If you don't use trimming and the first key time is not at 0.0, fake keys will be inserted.
-			for (int i = 0; i < track.rotation_track.times.size(); i++) {
-				anim_end = MAX(anim_end, track.rotation_track.times[i]);
-			}
-			for (int i = 0; i < track.position_track.times.size(); i++) {
-				anim_end = MAX(anim_end, track.position_track.times[i]);
-			}
-			for (int i = 0; i < track.scale_track.times.size(); i++) {
-				anim_end = MAX(anim_end, track.scale_track.times[i]);
-			}
-			for (int i = 0; i < track.weight_tracks.size(); i++) {
-				for (int j = 0; j < track.weight_tracks[i].times.size(); j++) {
-					anim_end = MAX(anim_end, track.weight_tracks[i].times[j]);
-				}
-			}
 		}
 
 		// Animated TRS properties will not affect a skinned mesh.
@@ -2883,103 +2788,84 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 				}
 			}
 
-			const double increment = 1.0 / p_bake_fps;
-			double time = anim_start;
-
-			Vector3 base_pos;
-			Quaternion base_rot;
-			Vector3 base_scale = Vector3(1, 1, 1);
-
-			if (rotation_idx == -1) {
-				base_rot = p_state->nodes[track_i.key]->rotation.normalized();
+			if (position_idx != -1) {
+				animation->track_set_interpolation_type(position_idx, Animation::INTERPOLATION_LINEAR);
+				for (int j = 0; j < track.position_track.times.size(); j++) {
+					const float t = track.position_track.times[j] - anim_start_offset;
+					const Vector3 value = track.position_track.values[j];
+					animation->position_track_insert_key(position_idx, t, value);
+				}
 			}
 
-			if (position_idx == -1) {
-				base_pos = p_state->nodes[track_i.key]->position;
+			if (rotation_idx != -1) {
+				animation->track_set_interpolation_type(rotation_idx, Animation::INTERPOLATION_LINEAR);
+				for (int j = 0; j < track.rotation_track.times.size(); j++) {
+					const float t = track.rotation_track.times[j] - anim_start_offset;
+					const Quaternion value = track.rotation_track.values[j];
+					animation->rotation_track_insert_key(rotation_idx, t, value);
+				}
 			}
 
-			if (scale_idx == -1) {
-				base_scale = p_state->nodes[track_i.key]->scale;
-			}
-
-			bool last = false;
-			while (true) {
-				Vector3 pos = base_pos;
-				Quaternion rot = base_rot;
-				Vector3 scale = base_scale;
-
-				if (position_idx >= 0) {
-					pos = _interpolate_track<Vector3>(track.position_track.times, track.position_track.values, time, track.position_track.interpolation);
-					animation->position_track_insert_key(position_idx, time - anim_start, pos);
-				}
-
-				if (rotation_idx >= 0) {
-					rot = _interpolate_track<Quaternion>(track.rotation_track.times, track.rotation_track.values, time, track.rotation_track.interpolation);
-					animation->rotation_track_insert_key(rotation_idx, time - anim_start, rot);
-				}
-
-				if (scale_idx >= 0) {
-					scale = _interpolate_track<Vector3>(track.scale_track.times, track.scale_track.values, time, track.scale_track.interpolation);
-					animation->scale_track_insert_key(scale_idx, time - anim_start, scale);
-				}
-
-				if (last) {
-					break;
-				}
-				time += increment;
-				if (time >= anim_end) {
-					last = true;
-					time = anim_end;
+			if (scale_idx != -1) {
+				animation->track_set_interpolation_type(scale_idx, Animation::INTERPOLATION_LINEAR);
+				for (int j = 0; j < track.scale_track.times.size(); j++) {
+					const float t = track.scale_track.times[j] - anim_start_offset;
+					const Vector3 value = track.scale_track.values[j];
+					animation->scale_track_insert_key(scale_idx, t, value);
 				}
 			}
 		}
 
-		for (int i = 0; i < track.weight_tracks.size(); i++) {
-			ERR_CONTINUE(fbx_node->mesh < 0 || fbx_node->mesh >= p_state->meshes.size());
-			Ref<FBXMesh> mesh = p_state->meshes[fbx_node->mesh];
-			ERR_CONTINUE(mesh.is_null());
-			ERR_CONTINUE(mesh->get_mesh().is_null());
-			ERR_CONTINUE(mesh->get_mesh()->get_mesh().is_null());
+	}
 
-			const String blend_path = String(mesh_instance_node_path) + ":" + String(mesh->get_mesh()->get_blend_shape_name(i));
+	for (FBXNodeIndex node_index = 0; node_index < p_state->nodes.size(); node_index++) {
+		Ref<FBXNode> node = p_state->nodes[node_index];
+		if (node->mesh < 0) {
+			continue;
+		}
 
-			const int track_idx = animation->get_track_count();
-			animation->add_track(Animation::TYPE_BLEND_SHAPE);
-			animation->track_set_path(track_idx, blend_path);
-			animation->track_set_imported(track_idx, true); //helps merging later
+		//for meshes, especially skinned meshes, there are cases where it will be added as a child
+		NodePath mesh_instance_node_path;
 
-			// Only LINEAR and STEP (NEAREST) can be supported out of the box by Godot's Animation,
-			// the other modes have to be baked.
-			FBXAnimation::Interpolation gltf_interp = track.weight_tracks[i].interpolation;
-			if (gltf_interp == FBXAnimation::INTERP_LINEAR || gltf_interp == FBXAnimation::INTERP_STEP) {
-				animation->track_set_interpolation_type(track_idx, gltf_interp == FBXAnimation::INTERP_STEP ? Animation::INTERPOLATION_NEAREST : Animation::INTERPOLATION_LINEAR);
-				for (int j = 0; j < track.weight_tracks[i].times.size(); j++) {
-					const float t = track.weight_tracks[i].times[j];
-					const float attribs = track.weight_tracks[i].values[j];
+		Node *root = p_animation_player->get_parent();
+		ERR_FAIL_COND(root == nullptr);
+		HashMap<FBXNodeIndex, Node *>::Iterator node_element = p_state->scene_nodes.find(node_index);
+		ERR_CONTINUE_MSG(!node_element, vformat("Unable to find node %d for animation.", node_index));
+		NodePath node_path = root->get_path_to(node_element->value);
+		HashMap<FBXNodeIndex, ImporterMeshInstance3D *>::Iterator mesh_instance_element = p_state->scene_mesh_instances.find(node_index);
+		if (mesh_instance_element) {
+			mesh_instance_node_path = root->get_path_to(mesh_instance_element->value);
+		} else {
+			mesh_instance_node_path = node_path;
+		}
+
+		Ref<FBXMesh> mesh = p_state->meshes[node->mesh];
+		ERR_CONTINUE(mesh.is_null());
+		ERR_CONTINUE(mesh->get_mesh().is_null());
+		ERR_CONTINUE(mesh->get_mesh()->get_mesh().is_null());
+
+		Vector<int> blend_channels = mesh->get_blend_channels();
+		for (int i = 0; i < blend_channels.size(); i++) {
+			FBXAnimation::BlendShapeTrack *blend_track = anim->get_blend_tracks().getptr(blend_channels[i]);
+			if (blend_track) {
+				const String blend_path = String(mesh_instance_node_path) + ":" + String(mesh->get_mesh()->get_blend_shape_name(i));
+
+				const int track_idx = animation->get_track_count();
+				animation->add_track(Animation::TYPE_BLEND_SHAPE);
+				animation->track_set_path(track_idx, blend_path);
+				animation->track_set_imported(track_idx, true); //helps merging later
+
+				animation->track_set_interpolation_type(track_idx, Animation::INTERPOLATION_LINEAR);
+				for (int j = 0; j < blend_track->weight_track.times.size(); j++) {
+					const float t = blend_track->weight_track.times[j] - anim_start_offset;
+					const float attribs = blend_track->weight_track.values[j];
 					animation->blend_shape_track_insert_key(track_idx, t, attribs);
-				}
-			} else {
-				// CATMULLROMSPLINE or CUBIC_SPLINE have to be baked, apologies.
-				const double increment = 1.0 / p_bake_fps;
-				double time = 0.0;
-				bool last = false;
-				while (true) {
-					real_t blend = _interpolate_track<real_t>(track.weight_tracks[i].times, track.weight_tracks[i].values, time, gltf_interp);
-					animation->blend_shape_track_insert_key(track_idx, time - anim_start, blend);
-					if (last) {
-						break;
-					}
-					time += increment;
-					if (time >= anim_end) {
-						last = true;
-						time = anim_end;
-					}
 				}
 			}
 		}
 	}
 
-	animation->set_length(anim_end - anim_start);
+	animation->set_length(anim->get_time_end() - anim->get_time_begin());
 
 	Ref<AnimationLibrary> library;
 	if (!p_animation_player->has_animation_library("")) {
@@ -3542,7 +3428,7 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 						weight.times.push_back(0.0f);
 						weight.values.push_back(0.0f);
 						weight.values.push_back(0.0f);
-						track.weight_tracks.push_back(weight);
+						// track.weight_tracks.push_back(weight);
 						continue;
 					}
 					Animation::InterpolationType interpolation = animation->track_get_interpolation_type(track_i);
@@ -3565,7 +3451,7 @@ void FBXDocument::_convert_animation(Ref<FBXState> p_state, AnimationPlayer *p_a
 					for (int32_t value_i = 0; value_i < key_count; value_i++) {
 						weight.values.write[value_i] = animation->track_get_key_value(shape_track_i, value_i);
 					}
-					track.weight_tracks.push_back(weight);
+					// track.weight_tracks.push_back(weight);
 				}
 				tracks[mesh_index] = track;
 			}
@@ -3638,7 +3524,6 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	}
 
 	ufbx_load_opts opts = {};
-	opts.allow_null_material = true;
 	opts.target_axes = ufbx_axes_right_handed_y_up;
 	opts.target_unit_meters = 1.0f;
 	opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
@@ -3652,7 +3537,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	file_stream.read_fn = &_file_access_read_fn;
 	file_stream.skip_fn = &_file_access_skip_fn;
 	file_stream.user = p_file.ptr();
-	p_state->scene = ufbx_scene_ref(ufbx_load_stream(&file_stream, &opts, &error));
+	p_state->scene.reset(ufbx_load_stream(&file_stream, &opts, &error));
 
 	if (!p_state->scene.get()) {
 		char err_buf[512];
