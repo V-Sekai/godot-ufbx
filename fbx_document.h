@@ -59,6 +59,8 @@ public:
 	static void unregister_all_fbx_document_extensions();
 
 private:
+	void _process_uv_set(PackedVector2Array &uv_array);
+	void _zero_unused_elements(Vector<float> &cur_custom, int start, int end, int num_channels);
 	void _build_parent_hierarchy(Ref<FBXState> p_state);
 	Error _parse_scenes(Ref<FBXState> p_state);
 	Error _parse_nodes(Ref<FBXState> p_state);

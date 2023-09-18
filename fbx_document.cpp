@@ -589,78 +589,61 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 					array[Mesh::ARRAY_TANGENT] = tangents;
 				}
+
 				if (fbx_mesh->vertex_uv.exists) {
 					PackedVector2Array uv_array = _decode_vertex_attrib_vec2(fbx_mesh->vertex_uv, indices);
-					for (int uv_array_i = 0; uv_array_i < uv_array.size(); uv_array_i++) {
-						Vector2 uv = uv_array[uv_array_i];
-						uv.y = 1.0 - uv.y;
-						uv_array.set(uv_array_i, uv);
-					}
+					_process_uv_set(uv_array);
 					array[Mesh::ARRAY_TEX_UV] = uv_array;
 				}
 
 				if (fbx_mesh->uv_sets.count >= 2 && fbx_mesh->uv_sets[1].vertex_uv.exists) {
 					PackedVector2Array uv2_array = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[1].vertex_uv, indices);
-					for (int uv2_i = 0; uv2_i < uv2_array.size(); uv2_i++) {
-						Vector2 uv = uv2_array[uv2_i];
-						uv.y = 1.0 - uv.y;
-						uv2_array.set(uv2_i, uv);
-					}
+					_process_uv_set(uv2_array);
 					array[Mesh::ARRAY_TEX_UV2] = uv2_array;
 				}
 
-				for (int custom_i = 0; custom_i < 3; custom_i++) {
+				for (int uv_i = 2; uv_i < 8; uv_i += 2) {
 					Vector<float> cur_custom;
 					Vector<Vector2> texcoord_first;
 					Vector<Vector2> texcoord_second;
 
-					int texcoord_i = 2 + 2 * custom_i;
+					int texcoord_i = uv_i;
+					int texcoord_next = texcoord_i + 1;
 					int num_channels = 0;
 					if (texcoord_i < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_i].vertex_uv.exists) {
 						texcoord_first = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i].vertex_uv, indices);
 						num_channels = 2;
 					}
-					if (texcoord_i + 1 < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv.exists) {
-						texcoord_second = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i + 1].vertex_uv, indices);
+					if (texcoord_next < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_next].vertex_uv.exists) {
+						texcoord_second = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_next].vertex_uv, indices);
 						num_channels = 4;
 					}
 					if (!num_channels) {
 						break;
 					}
-					if (num_channels == 2 || num_channels == 4) {
-						cur_custom.resize(vertex_num * num_channels);
-						for (int32_t uv_i = 0; uv_i < texcoord_first.size() && uv_i < vertex_num; uv_i++) {
-							cur_custom.write[uv_i * num_channels + 0] = texcoord_first[uv_i].x;
-							cur_custom.write[uv_i * num_channels + 1] = texcoord_first[uv_i].y;
-						}
-						// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
-						for (int32_t uv_i = texcoord_first.size(); uv_i < vertex_num; uv_i++) {
-							cur_custom.write[uv_i * num_channels + 0] = 0;
-							cur_custom.write[uv_i * num_channels + 1] = 0;
-						}
+					cur_custom.resize(vertex_num * num_channels);
+					for (int32_t uv_i = 0; uv_i < texcoord_first.size() && uv_i < vertex_num; uv_i++) {
+						int index = uv_i * num_channels;
+						cur_custom.write[index] = texcoord_first[uv_i].x;
+						cur_custom.write[index + 1] = texcoord_first[uv_i].y;
 					}
 					if (num_channels == 4) {
 						for (int32_t uv_i = 0; uv_i < texcoord_second.size() && uv_i < vertex_num; uv_i++) {
-							// num_channels must be 4
-							cur_custom.write[uv_i * num_channels + 2] = texcoord_second[uv_i].x;
-							cur_custom.write[uv_i * num_channels + 3] = texcoord_second[uv_i].y;
+							int index = uv_i * num_channels;
+							cur_custom.write[index + 2] = texcoord_second[uv_i].x;
+							cur_custom.write[index + 3] = texcoord_second[uv_i].y;
 						}
-						// Vector.resize seems to not zero-initialize. Ensure all unused elements are 0:
-						for (int32_t uv_i = texcoord_second.size(); uv_i < vertex_num; uv_i++) {
-							cur_custom.write[uv_i * num_channels + 2] = 0;
-							cur_custom.write[uv_i * num_channels + 3] = 0;
-						}
+						_zero_unused_elements(cur_custom, texcoord_second.size(), vertex_num, num_channels);
+					} else if (num_channels == 2) {
+						_zero_unused_elements(cur_custom, texcoord_first.size(), vertex_num, num_channels);
 					}
-					if (cur_custom.size() > 0) {
-						array[Mesh::ARRAY_CUSTOM0 + custom_i] = cur_custom;
-						int custom_shift = Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT + custom_i * Mesh::ARRAY_FORMAT_CUSTOM_BITS;
-						if (num_channels == 2) {
-							flags |= Mesh::ARRAY_CUSTOM_RG_FLOAT << custom_shift;
-						} else {
-							flags |= Mesh::ARRAY_CUSTOM_RGBA_FLOAT << custom_shift;
-						}
+					if (!cur_custom.is_empty()) {
+						array[Mesh::ARRAY_CUSTOM0 + ((uv_i - 2) / 2)] = cur_custom; // Map uv2-uv7 to custom0-custom2
+						int custom_shift = Mesh::ARRAY_FORMAT_CUSTOM0_SHIFT + ((uv_i - 2) / 2) * Mesh::ARRAY_FORMAT_CUSTOM_BITS;
+						flags |= (num_channels == 2 ? Mesh::ARRAY_CUSTOM_RG_FLOAT : Mesh::ARRAY_CUSTOM_RGBA_FLOAT) << custom_shift;
 					}
 				}
+
 				if (fbx_mesh->vertex_color.exists) {
 					array[Mesh::ARRAY_COLOR] = _decode_vertex_attrib_color(fbx_mesh->vertex_color, indices);
 					has_vertex_color = true;
@@ -3164,4 +3147,21 @@ Error FBXDocument::append_from_file(String p_path, Ref<FBXState> p_state, uint32
 		ERR_FAIL_COND_V(err != OK, err);
 	}
 	return OK;
+}
+
+void FBXDocument::_process_uv_set(PackedVector2Array &uv_array) {
+	int uv_size = uv_array.size();
+	for (int uv_i = 0; uv_i < uv_size; uv_i++) {
+		Vector2 &uv = uv_array.write[uv_i];
+		uv.y = 1.0 - uv.y;
+	}
+}
+
+void FBXDocument::_zero_unused_elements(Vector<float> &cur_custom, int start, int end, int num_channels) {
+	for (int32_t uv_i = start; uv_i < end; uv_i++) {
+		int index = uv_i * num_channels;
+		for (int channel = 0; channel < num_channels; channel++) {
+			cur_custom.write[index + channel] = 0;
+		}
+	}
 }
