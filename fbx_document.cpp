@@ -622,16 +622,16 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 						break;
 					}
 					cur_custom.resize(vertex_num * num_channels);
-					for (int32_t uv_i = 0; uv_i < texcoord_first.size() && uv_i < vertex_num; uv_i++) {
-						int index = uv_i * num_channels;
-						cur_custom.write[index] = texcoord_first[uv_i].x;
-						cur_custom.write[index + 1] = texcoord_first[uv_i].y;
+					for (int32_t uv_first_i = 0; uv_first_i < texcoord_first.size() && uv_first_i < vertex_num; uv_first_i++) {
+						int index = uv_first_i * num_channels;
+						cur_custom.write[index] = texcoord_first[uv_first_i].x;
+						cur_custom.write[index + 1] = texcoord_first[uv_first_i].y;
 					}
 					if (num_channels == 4) {
-						for (int32_t uv_i = 0; uv_i < texcoord_second.size() && uv_i < vertex_num; uv_i++) {
-							int index = uv_i * num_channels;
-							cur_custom.write[index + 2] = texcoord_second[uv_i].x;
-							cur_custom.write[index + 3] = texcoord_second[uv_i].y;
+						for (int32_t uv_second_i = 0; uv_second_i < texcoord_second.size() && uv_second_i < vertex_num; uv_second_i++) {
+							int index = uv_second_i * num_channels;
+							cur_custom.write[index + 2] = texcoord_second[uv_second_i].x;
+							cur_custom.write[index + 3] = texcoord_second[uv_second_i].y;
 						}
 						_zero_unused_elements(cur_custom, texcoord_second.size(), vertex_num, num_channels);
 					} else if (num_channels == 2) {
