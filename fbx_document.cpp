@@ -612,10 +612,12 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					int num_channels = 0;
 					if (texcoord_i < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_i].vertex_uv.exists) {
 						texcoord_first = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_i].vertex_uv, indices);
+						_process_uv_set(texcoord_first);
 						num_channels = 2;
 					}
 					if (texcoord_next < static_cast<int>(fbx_mesh->uv_sets.count) && fbx_mesh->uv_sets[texcoord_next].vertex_uv.exists) {
 						texcoord_second = _decode_vertex_attrib_vec2(fbx_mesh->uv_sets[texcoord_next].vertex_uv, indices);
+						_process_uv_set(texcoord_second);
 						num_channels = 4;
 					}
 					if (!num_channels) {
