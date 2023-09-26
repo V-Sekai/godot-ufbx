@@ -15911,7 +15911,6 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 		} else if (tmp->src_prop.length == 0 && tmp->dst_prop.length != 0) {
 			const char *dst_prop = tmp->dst_prop.data;
 			if (dst->type == UFBX_ELEMENT_ANIM_VALUE && src->type == UFBX_ELEMENT_ANIM_CURVE) {
-				ufbx_anim_value *dst_value = (ufbx_anim_value*)dst;
 				ufbx_anim_curve *src_curve = (ufbx_anim_curve*)src;
 				uint32_t index = 0;
 				if (dst_prop == ufbxi_Y || dst_prop == ufbxi_d_Y) {
@@ -20535,7 +20534,6 @@ ufbxi_noinline static void ufbxi_update_adjust_transforms(ufbxi_context *uc, ufb
 		light->local_direction.z = 0.0f;
 	}
 
-	ufbx_real root_scale = ufbxi_min3(root_transform.scale);
 	ufbxi_for_ptr_list(ufbx_node, p_node, scene->nodes) {
 		ufbx_node *node = *p_node;
 
@@ -21708,22 +21706,6 @@ static ufbxi_noinline void ufbxi_transform_to_axes(ufbxi_context *uc, ufbx_coord
 		uc->scene.root_node->local_transform = ufbx_matrix_to_transform(&axis_mat);
 		uc->scene.root_node->node_to_parent = axis_mat;
 	}
-}
-
-static ufbxi_noinline void ufbxi_scale_anim_curve(ufbx_anim_curve *curve, ufbx_real scale)
-{
-	if (!curve) return;
-	ufbxi_for_list(ufbx_keyframe, key, curve->keyframes) {
-		key->value *= scale;
-	}
-}
-
-static ufbxi_noinline void ufbxi_scale_anim_value(ufbx_anim_value *value, ufbx_real scale)
-{
-	if (!value) return;
-	ufbxi_scale_anim_curve(value->curves[0], scale);
-	ufbxi_scale_anim_curve(value->curves[1], scale);
-	ufbxi_scale_anim_curve(value->curves[2], scale);
 }
 
 static ufbxi_noinline int ufbxi_scale_units(ufbxi_context *uc, ufbx_real target_meters)
@@ -23386,7 +23368,6 @@ ufbxi_nodiscard static ufbxi_noinline bool ufbxi_in_list(const char *const *item
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_finalize_bake_times(ufbxi_bake_context *bc, ufbxi_double_list *p_dst)
 {
-	const ufbx_anim *anim = bc->anim;
 	if (bc->layer_weight_times.count > 0) {
 		ufbxi_check_err(&bc->error, ufbxi_push_copy(&bc->tmp_times, double, bc->layer_weight_times.count, bc->layer_weight_times.data));
 	}
