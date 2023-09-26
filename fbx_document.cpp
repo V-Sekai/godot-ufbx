@@ -387,6 +387,8 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 
 		if (fbx_node->name.length > 0) {
 			node->set_name(_as_string(fbx_node->name));
+		} else if (fbx_node->is_root) {
+			node->set_name("Root");
 		}
 		if (fbx_node->mesh) {
 			node->mesh = fbx_node->mesh->typed_id;
