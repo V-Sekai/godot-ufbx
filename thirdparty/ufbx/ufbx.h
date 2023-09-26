@@ -129,7 +129,7 @@
 
 // bindgen-disable
 
-#if UFBX_CPP11 && 0
+#if UFBX_CPP11
 
 template <typename T, typename U>
 struct ufbxi_type_is { };
@@ -736,15 +736,15 @@ typedef enum ufbx_inherit_mode UFBX_ENUM_REPR {
 
 	// Ignore parent scale when computing the transform: `R*r*s`.
 	//   ufbx_transform t = node.local_transform;
-	//   t.translation *= parent.local_transform.scale;
+	//   t.translation *= parent.inherit_scale;
 	//   child.node_to_world = parent.unscaled_node_to_world * t;
 	// Also known as "Segment scale compensate" in some software.
 	UFBX_INHERIT_MODE_IGNORE_PARENT_SCALE,
 
 	// Apply parent scale component-wise: `R*r*S*s`.
 	//   ufbx_transform t = node.local_transform;
-	//   t.translation *= parent.local_transform.scale;
-	//   t.scale *= parent.local_transform.scale;
+	//   t.translation *= parent.inherit_scale;
+	//   t.scale *= parent.inherit_scale;
 	//   child.node_to_world = parent.unscaled_node_to_world * t;
 	UFBX_INHERIT_MODE_COMPONENTWISE_SCALE,
 
@@ -814,6 +814,10 @@ struct ufbx_node {
 	ufbx_inherit_mode original_inherit_mode;
 	ufbx_transform local_transform;
 	ufbx_transform geometry_transform;
+
+	// Combined scale when using `UFBX_INHERIT_MODE_COMPONENTWISE_SCALE`.
+	// Contains `local_transform.scale` otherwise.
+	ufbx_vec3 inherit_scale;
 
 	// Raw Euler angles in degrees for those who want them
 
@@ -1703,8 +1707,8 @@ struct ufbx_stereo_camera {
 		ufbx_node_list instances;
 	}; };
 
-	ufbx_camera *left;
-	ufbx_camera *right;
+	ufbx_nullable ufbx_camera *left;
+	ufbx_nullable ufbx_camera *right;
 };
 
 struct ufbx_camera_switcher {
@@ -4014,6 +4018,53 @@ typedef enum ufbx_space_conversion UFBX_ENUM_REPR {
 
 UFBX_ENUM_TYPE(ufbx_space_conversion, UFBX_SPACE_CONVERSION, UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS);
 
+typedef struct ufbx_baked_vec3 {
+	double time;
+	ufbx_vec3 value;
+} ufbx_baked_vec3;
+
+UFBX_LIST_TYPE(ufbx_baked_vec3_list, ufbx_baked_vec3);
+
+typedef struct ufbx_baked_quat {
+	double time;
+	ufbx_quat value;
+} ufbx_baked_quat;
+
+UFBX_LIST_TYPE(ufbx_baked_quat_list, ufbx_baked_quat);
+
+typedef struct ufbx_baked_node {
+	uint32_t typed_id;
+	uint32_t element_id;
+	bool constant_translation;
+	bool constant_rotation;
+	bool constant_scale;
+	ufbx_baked_vec3_list translation_keys;
+	ufbx_baked_quat_list rotation_keys;
+	ufbx_baked_vec3_list scale_keys;
+} ufbx_baked_node;
+
+UFBX_LIST_TYPE(ufbx_baked_node_list, ufbx_baked_node);
+
+typedef struct ufbx_baked_prop {
+	ufbx_string name;
+	bool constant_value;
+	ufbx_baked_vec3_list keys;
+} ufbx_baked_prop;
+
+UFBX_LIST_TYPE(ufbx_baked_prop_list, ufbx_baked_prop);
+
+typedef struct ufbx_baked_element {
+	uint32_t element_id;
+	ufbx_baked_prop_list props;
+} ufbx_baked_element;
+
+UFBX_LIST_TYPE(ufbx_baked_element_list, ufbx_baked_element);
+
+typedef struct ufbx_baked_anim {
+	ufbx_baked_node_list nodes;
+	ufbx_baked_element_list elements;
+} ufbx_baked_anim;
+
 // -- Main API
 
 // Options for `ufbx_load_file/memory/stream/stdio()`
@@ -4273,6 +4324,70 @@ typedef struct ufbx_anim_opts {
 
 	uint32_t _end_zero;
 } ufbx_anim_opts;
+
+typedef struct ufbx_bake_opts {
+	uint32_t _begin_zero;
+
+	ufbx_allocator_opts temp_allocator;   // < Allocator used during loading
+	ufbx_allocator_opts result_allocator; // < Allocator used for the final baked animation
+
+	// Offset to start the evaluation from.
+	double time_start_offset;
+
+	// Sample rate in seconds.
+	// Samples per second to use for resampling non-linear animation.
+	// Default: 30
+	double resample_rate;
+
+	// Minimum sample rate to not resample.
+	// Many exporters resample animation by default. To avoid double-resampling
+	// keyframe rates higher or equal to this will not be resampled.
+	// Default: 19.5
+	double minimum_sample_rate;
+
+	// Bake the raw versions of properties related to transforms.
+	bool bake_transform_props;
+
+	// Do not bake node transforms.
+	bool skip_node_transforms;
+
+	// Do not resample linear rotation keyframes.
+	// FBX interpolates rotation in Euler angles, so this might cause incorrect interpolation.
+	bool no_resample_rotation;
+
+	// Ignore layer weight animation.
+	bool ignore_layer_weight_animation;
+
+	// Maximum number of segments to generate from one keyframe.
+	// Default: 32
+	size_t max_keyframe_segments;
+
+	// Timestep in seconds for constant interpolation.
+	// Default of `0.0` uses the smallest representable time offset.
+	double constant_timestep;
+
+	// Enable key reduction.
+	bool key_reduction_enabled;
+
+	// Enable key reduction for non-constant rotations.
+	// Assumes rotations will be interpolated using a spherical linear interpolation at runtime.
+	bool key_reduction_rotation;
+
+	// Threshold for reducing keys for linear segments.
+	// Default `0.000001`, use negative to disable.
+	double key_reduction_threshold;
+
+	// Maximum passes over the keys to reduce.
+	// Every pass can potentially halve the the amount of keys.
+	// Default: `4`
+	size_t key_reduction_passes;
+
+	// Compensate for `UFBX_INHERIT_NO_SCALE` by adjusting child scale.
+	// NOTE: This is an lossy operation, and properly works only for uniform scaling.
+	bool compensate_inherit_no_scale;
+
+	uint32_t _end_zero;
+} ufbx_bake_opts;
 
 // Options for `ufbx_tessellate_nurbs_curve()`
 // NOTE: Initialize to zero with `{ 0 }` (C) or `{ }` (C++)
@@ -4593,6 +4708,11 @@ typedef enum ufbx_transform_flags UFBX_FLAG_REPR {
 	// Ignore parent scale helper.
 	UFBX_TRANSFORM_FLAG_IGNORE_SCALE_HELPER = 0x1,
 
+	// Ignore componentwise scale.
+	// Note that if you don't specify this, ufbx will have to potentially
+	// evaluate the entire parent chain in the worst case.
+	UFBX_TRANSFORM_FLAG_IGNORE_COMPONENTWISE_SCALE = 0x2,
+
 	UFBX_FLAG_FORCE_WIDTH(UFBX_TRANSFORM_FLAGS)
 } ufbx_transform_flags;
 
@@ -4616,117 +4736,6 @@ ufbx_abi void ufbx_retain_anim(ufbx_anim *anim);
 ufbx_abi void ufbx_free_anim(ufbx_anim *anim);
 
 // Animation baking
-
-typedef struct ufbx_baked_vec3 {
-	double time;
-	ufbx_vec3 value;
-} ufbx_baked_vec3;
-
-UFBX_LIST_TYPE(ufbx_baked_vec3_list, ufbx_baked_vec3);
-
-typedef struct ufbx_baked_quat {
-	double time;
-	ufbx_quat value;
-} ufbx_baked_quat;
-
-UFBX_LIST_TYPE(ufbx_baked_quat_list, ufbx_baked_quat);
-
-typedef struct ufbx_baked_node {
-	uint32_t typed_id;
-	uint32_t element_id;
-	bool constant_translation;
-	bool constant_rotation;
-	bool constant_scale;
-	ufbx_baked_vec3_list translation_keys;
-	ufbx_baked_quat_list rotation_keys;
-	ufbx_baked_vec3_list scale_keys;
-} ufbx_baked_node;
-
-UFBX_LIST_TYPE(ufbx_baked_node_list, ufbx_baked_node);
-
-typedef struct ufbx_baked_prop {
-	ufbx_string name;
-	bool constant_value;
-	ufbx_baked_vec3_list keys;
-} ufbx_baked_prop;
-
-UFBX_LIST_TYPE(ufbx_baked_prop_list, ufbx_baked_prop);
-
-typedef struct ufbx_baked_element {
-	uint32_t element_id;
-	ufbx_baked_prop_list props;
-} ufbx_baked_element;
-
-UFBX_LIST_TYPE(ufbx_baked_element_list, ufbx_baked_element);
-
-typedef struct ufbx_baked_anim {
-	ufbx_baked_node_list nodes;
-	ufbx_baked_element_list elements;
-} ufbx_baked_anim;
-
-typedef struct ufbx_bake_opts {
-	uint32_t _begin_zero;
-
-	ufbx_allocator_opts temp_allocator;   // < Allocator used during loading
-	ufbx_allocator_opts result_allocator; // < Allocator used for the final baked animation
-
-	// Offset to start the evaluation from.
-	double time_start_offset;
-
-	// Sample rate in seconds.
-	// Samples per second to use for resampling non-linear animation.
-	// Default: 30
-	double resample_rate;
-
-	// Minimum sample rate to not resample.
-	// Many exporters resample animation by default. To avoid double-resampling
-	// keyframe rates higher or equal to this will not be resampled.
-	// Default: 19.5
-	double minimum_sample_rate;
-
-	// Bake the raw versions of properties related to transforms.
-	bool bake_transform_props;
-
-	// Do not bake node transforms.
-	bool skip_node_transforms;
-
-	// Do not resample linear rotation keyframes.
-	// FBX interpolates rotation in Euler angles, so this might cause incorrect interpolation.
-	bool no_resample_rotation;
-
-	// Ignore layer weight animation.
-	bool ignore_layer_weight_animation;
-
-	// Maximum number of segments to generate from one keyframe.
-	// Default: 32
-	size_t max_keyframe_segments;
-
-	// Timestep in seconds for constant interpolation.
-	// Default of `0.0` uses the smallest representable time offset.
-	double constant_timestep;
-
-	// Enable key reduction.
-	bool key_reduction_enabled;
-
-	// Enable key reduction for non-constant rotations.
-	// Assumes rotations will be interpolated using a spherical linear interpolation at runtime.
-	bool key_reduction_rotation;
-
-	// Threshold for reducing keys for linear segments.
-	// Default `0.000001`, use negative to disable.
-	double key_reduction_threshold;
-
-	// Maximum passes over the keys to reduce.
-	// Every pass can potentially halve the the amount of keys.
-	// Default: `4`
-	size_t key_reduction_passes;
-
-	// Compensate for `UFBX_INHERIT_NO_SCALE` by adjusting child scale.
-	// NOTE: This is an lossy operation, and properly works only for uniform scaling.
-	bool compensate_inherit_no_scale;
-
-	uint32_t _end_zero;
-} ufbx_bake_opts;
 
 ufbx_abi ufbx_baked_anim *ufbx_bake_anim(const ufbx_scene *scene, const ufbx_anim *anim, const ufbx_bake_opts *opts, ufbx_error *error);
 
