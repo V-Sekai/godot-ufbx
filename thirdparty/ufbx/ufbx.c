@@ -12331,12 +12331,12 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 		next_time = (double)p_time[0] / uc->ktime_sec_double;
 	}
 
-	for (size_t i = 0; i < num_keys; i++) {
-		ufbx_keyframe *key = &keys[i];
+	for (size_t key_i = 0; key_i < num_keys; key_i++) {
+		ufbx_keyframe *key = &keys[key_i];
 		ufbxi_check(p_ref < p_ref_end);
 
 		ufbx_real value = *p_value;
-		if (i == 0) {
+		if (key_i == 0) {
 			curve->min_value = value;
 			curve->max_value = value;
 		} else {
@@ -12347,7 +12347,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 		key->time = next_time;
 		key->value = value;
 
-		if (i + 1 < num_keys) {
+		if (key_i + 1 < num_keys) {
 			next_time = (double)p_time[1] / uc->ktime_sec_double;
 		}
 
@@ -12410,7 +12410,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 				// TODO: TCB tangents (0x200)
 				// TODO: Auto break (0x800)
 
-				if (i > 0 && i + 1 < num_keys && key->time > prev_time && next_time > key->time) {
+				if (key_i > 0 && key_i + 1 < num_keys && key->time > prev_time && next_time > key->time) {
 					slope_left = slope_right = ufbxi_solve_auto_tangent(
 						prev_time, key->time, next_time,
 						p_value[-1], key->value, p_value[1],
@@ -13145,10 +13145,10 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_take_anim_channel(ufbxi_con
 		next_value = data[1];
 	}
 
-	for (size_t i = 0; i < num_keys; i++) {
-		ufbx_keyframe *key = &curve->keyframes.data[i];
+	for (size_t key_j = 0; key_j < num_keys; key_j++) {
+		ufbx_keyframe *key = &curve->keyframes.data[key_j];
 
-		if (i == 0) {
+		if (key_j == 0) {
 			curve->min_value = next_value;
 			curve->max_value = next_value;
 		} else {
@@ -13257,14 +13257,14 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_take_anim_channel(ufbxi_con
 		}
 
 		// Retrieve next key and value
-		if (i + 1 < num_keys) {
+		if (key_j + 1 < num_keys) {
 			ufbxi_check(data_end - data >= 2);
 			next_time = data[0] / uc->ktime_sec_double;
 			next_value = data[1];
 		}
 
 		if (auto_slope) {
-			if (i > 0) {
+			if (key_j > 0) {
 				slope_left = slope_right = ufbxi_solve_auto_tangent(
 					prev_time, key->time, next_time,
 					key[-1].value, key->value, (ufbx_real)next_value,
@@ -23296,12 +23296,12 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_times(ufbxi_bake_context *b
 
 		const ufbx_keyframe *keys = curve->keyframes.data;
 		size_t num_keys = curve->keyframes.count;
-		for (size_t i = 0; i < num_keys; i++) {
-			ufbx_keyframe a = keys[i];
+		for (size_t key_k = 0; key_k < num_keys; key_k++) {
+			ufbx_keyframe a = keys[key_k];
 			double a_time = a.time - bc->opts.time_start_offset;
 			ufbxi_check_err(&bc->error, ufbxi_bake_push_time(bc, a_time));
-			if (i + 1 >= num_keys) break;
-			ufbx_keyframe b = keys[i + 1];
+			if (key_k + 1 >= num_keys) break;
+			ufbx_keyframe b = keys[key_k + 1];
 			double b_time = b.time - bc->opts.time_start_offset;
 
 			// Skip fully flat sections
@@ -23329,8 +23329,8 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_times(ufbxi_bake_context *b
 				double padding = 0.5 / sample_rate;
 				double start = ufbx_ceil((a_time + padding) * sample_rate / factor) * factor;
 				double stop = b_time - padding;
-				for (size_t i = 0; i < bc->opts.max_keyframe_segments; i++) {
-					double time = (start + (double)i * factor) / sample_rate;
+				for (size_t keyframe_segments_i = 0; keyframe_segments_i < bc->opts.max_keyframe_segments; keyframe_segments_i++) {
+					double time = (start + (double)keyframe_segments_i * factor) / sample_rate;
 					if (time >= stop) break;
 					ufbxi_check_err(&bc->error, ufbxi_bake_push_time(bc, time));
 				}
