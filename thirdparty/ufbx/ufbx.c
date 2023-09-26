@@ -16013,20 +16013,20 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 				}
 			}
 			if (has_unscaled_children[node->typed_id] && !node->scale_helper) {
-				ufbxi_pre_node *pre_node = &pre_nodes[node->typed_id];
+				ufbxi_pre_node *pre_node_unscaled_children = &pre_nodes[node->typed_id];
 				ufbx_real ref = uc->opts.inherit_mode_handling == UFBX_INHERIT_MODE_HANDLING_COMPENSATE
-					? pre_node->constant_scale.x : (ufbx_real)1.0f;
-				ufbx_vec3 scale = pre_node->constant_scale;
+					? pre_node_unscaled_children->constant_scale.x : (ufbx_real)1.0f;
+				ufbx_vec3 scale = pre_node_unscaled_children->constant_scale;
 				ufbx_real dx = ufbx_fabs(scale.x - ref);
 				ufbx_real dy = ufbx_fabs(scale.y - ref);
 				ufbx_real dz = ufbx_fabs(scale.z - ref);
-				if (dx + dy + dz >= scale_epsilon || !pre_node->has_constant_scale || ufbx_fabs(scale.x) <= compensate_epsilon) {
+				if (dx + dy + dz >= scale_epsilon || !pre_node_unscaled_children->has_constant_scale || ufbx_fabs(scale.x) <= compensate_epsilon) {
 					ufbxi_check(ufbxi_setup_scale_helper(uc, node, fbx_id));
 
 					// If we added a geometry transform helper, we need to do it
 					// recursively for all child nodes using  `UFBX_INHERIT_MODE_COMPONENTWISE_SCALE`
-					ufbxi_pre_node *pre_node = &pre_nodes[node->typed_id];
-					uint32_t ix = pre_node->first_child;
+					ufbxi_pre_node *pre_node_unscaled_children_geometric_helper = &pre_nodes[node->typed_id];
+					uint32_t ix = pre_node_unscaled_children_geometric_helper->first_child;
 					size_t count = 0, max_count = num_nodes * 4;
 					while (ix != ~0u && ix != node->typed_id) {
 						// Safeguard against cyclical parents etc.
