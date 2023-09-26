@@ -2929,7 +2929,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.target_unit_meters = 1.0f;
 	opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
 	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_HELPER_NODES;
-	opts.inherit_mode_handling = UFBX_INHERIT_MODE_HANDLING_HELPER_NODES;
+	opts.inherit_mode_handling = UFBX_INHERIT_MODE_HANDLING_COMPENSATE;
 	opts.geometry_transform_helper_name.data = "_GeometryTransformHelper";
 	opts.geometry_transform_helper_name.length = SIZE_MAX;
 	opts.scale_helper_name.data = "_ScaleHelper";
