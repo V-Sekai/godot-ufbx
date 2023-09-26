@@ -19982,7 +19982,6 @@ ufbxi_noinline static void ufbxi_update_node(ufbx_node *node)
 			node->unscaled_node_to_world = ufbx_matrix_mul(&parent->node_to_world, &unscaled_node_to_parent);
 		} else {
 			ufbx_transform transform = node->local_transform;
-			ufbx_transform parent_transform = parent->local_transform;
 			ufbx_vec3 parent_scale = parent->inherit_scale;
 
 			if (node->inherit_mode == UFBX_INHERIT_MODE_COMPONENTWISE_SCALE) {
@@ -19997,9 +19996,6 @@ ufbxi_noinline static void ufbxi_update_node(ufbx_node *node)
 			transform.translation.x *= parent_scale.x;
 			transform.translation.y *= parent_scale.y;
 			transform.translation.z *= parent_scale.z;
-			parent_transform.scale.x = 1.0f;
-			parent_transform.scale.y = 1.0f;
-			parent_transform.scale.z = 1.0f;
 
 			ufbx_matrix node_to_unscaled_parent = ufbx_transform_to_matrix(&transform);
 			ufbx_matrix unscaled_node_to_unscaled_parent = ufbxi_unscaled_transform_to_matrix(&transform);
