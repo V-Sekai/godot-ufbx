@@ -387,6 +387,8 @@ Error FBXDocument::_parse_nodes(Ref<FBXState> p_state) {
 
 		if (fbx_node->name.length > 0) {
 			node->set_name(_as_string(fbx_node->name));
+		} else if (fbx_node->is_root) {
+			node->set_name("Root");
 		}
 		if (fbx_node->mesh) {
 			node->mesh = fbx_node->mesh->typed_id;
@@ -2926,7 +2928,12 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.target_axes = ufbx_axes_right_handed_y_up;
 	opts.target_unit_meters = 1.0f;
 	opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
-	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
+	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_HELPER_NODES;
+	opts.inherit_mode_handling = UFBX_INHERIT_MODE_HANDLING_HELPER_NODES;
+	opts.geometry_transform_helper_name.data = "_GeometryTransformHelper";
+	opts.geometry_transform_helper_name.length = SIZE_MAX;
+	opts.scale_helper_name.data = "_ScaleHelper";
+	opts.scale_helper_name.length = SIZE_MAX;
 	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
 	if (p_state->discard_meshes_and_materials) {
