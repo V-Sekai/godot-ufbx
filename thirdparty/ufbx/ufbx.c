@@ -23841,17 +23841,22 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_node_imp(ufbxi_bake_context
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_node(ufbxi_bake_context *bc, uint32_t element_id, ufbxi_bake_prop *props, size_t count)
 {
-	ufbxi_bake_node_imp(bc, element_id, props, count);
+    int result = ufbxi_bake_node_imp(bc, element_id, props, count);
+    if (result != 1) {
+        return result;
+    }
 
-	// Baking a node may cause further nodes to be baked, so keep going
-	// until all dependencies are baked.
-	while (bc->tmp_bake_stack.num_items > 0) {
-		uint32_t child_id = 0;
-		ufbxi_pop(&bc->tmp_bake_stack, uint32_t, 1, &child_id);
-		ufbxi_bake_node_imp(bc, child_id, NULL, 0);
-	}
-
-	return 1;
+    // Baking a node may cause further nodes to be baked, so keep going
+    // until all dependencies are baked.
+    while (bc->tmp_bake_stack.num_items > 0) {
+        uint32_t child_id = 0;
+        ufbxi_pop(&bc->tmp_bake_stack, uint32_t, 1, &child_id);
+        result = ufbxi_bake_node_imp(bc, child_id, NULL, 0);
+        if (result != 1) {
+            return result;
+        }
+    }
+    return 1;
 }
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_anim_prop(ufbxi_bake_context *bc, ufbx_element *element, const char *prop_name, ufbxi_bake_prop *props, size_t count)
