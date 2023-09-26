@@ -201,7 +201,7 @@
 	double ufbx_copysign(double x, double y);
 	double ufbx_nextafter(double x, double y);
 	double ufbx_ceil(double x);
-	double ufbx_isnan(double x);
+	int ufbx_isnan(double x);
 #endif
 
 #if !defined(UFBX_INFINITY)
@@ -694,7 +694,7 @@ ufbx_static_assert(sizeof_f64, sizeof(double) == 8);
 
 // -- Version
 
-#define UFBX_SOURCE_VERSION ufbx_pack_version(0, 7, 0)
+#define UFBX_SOURCE_VERSION ufbx_pack_version(0, 8, 0)
 const uint32_t ufbx_source_version = UFBX_SOURCE_VERSION;
 
 ufbx_static_assert(source_header_version, UFBX_SOURCE_VERSION/1000u == UFBX_HEADER_VERSION/1000u);
@@ -12331,12 +12331,12 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 		next_time = (double)p_time[0] / uc->ktime_sec_double;
 	}
 
-	for (size_t key_i = 0; key_i < num_keys; key_i++) {
-		ufbx_keyframe *key = &keys[key_i];
+	for (size_t i = 0; i < num_keys; i++) {
+		ufbx_keyframe *key = &keys[i];
 		ufbxi_check(p_ref < p_ref_end);
 
 		ufbx_real value = *p_value;
-		if (key_i == 0) {
+		if (i == 0) {
 			curve->min_value = value;
 			curve->max_value = value;
 		} else {
@@ -12347,7 +12347,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 		key->time = next_time;
 		key->value = value;
 
-		if (key_i + 1 < num_keys) {
+		if (i + 1 < num_keys) {
 			next_time = (double)p_time[1] / uc->ktime_sec_double;
 		}
 
@@ -12410,7 +12410,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_animation_curve(ufbxi_conte
 				// TODO: TCB tangents (0x200)
 				// TODO: Auto break (0x800)
 
-				if (key_i > 0 && key_i + 1 < num_keys && key->time > prev_time && next_time > key->time) {
+				if (i > 0 && i + 1 < num_keys && key->time > prev_time && next_time > key->time) {
 					slope_left = slope_right = ufbxi_solve_auto_tangent(
 						prev_time, key->time, next_time,
 						p_value[-1], key->value, p_value[1],
@@ -13145,15 +13145,15 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_take_anim_channel(ufbxi_con
 		next_value = data[1];
 	}
 
-	for (size_t key_j = 0; key_j < num_keys; key_j++) {
-		ufbx_keyframe *key = &curve->keyframes.data[key_j];
+	for (size_t i = 0; i < num_keys; i++) {
+		ufbx_keyframe *key = &curve->keyframes.data[i];
 
-		if (key_j == 0) {
-			curve->min_value = next_value;
-			curve->max_value = next_value;
+		if (i == 0) {
+			curve->min_value = (ufbx_real)next_value;
+			curve->max_value = (ufbx_real)next_value;
 		} else {
-			curve->min_value = ufbxi_min_real(curve->min_value, next_value);
-			curve->max_value = ufbxi_max_real(curve->max_value, next_value);
+			curve->min_value = ufbxi_min_real(curve->min_value, (ufbx_real)next_value);
+			curve->max_value = ufbxi_max_real(curve->max_value, (ufbx_real)next_value);
 		}
 
 		// First three values: Time, Value, InterpolationMode
@@ -13257,14 +13257,14 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_read_take_anim_channel(ufbxi_con
 		}
 
 		// Retrieve next key and value
-		if (key_j + 1 < num_keys) {
+		if (i + 1 < num_keys) {
 			ufbxi_check(data_end - data >= 2);
 			next_time = data[0] / uc->ktime_sec_double;
 			next_value = data[1];
 		}
 
 		if (auto_slope) {
-			if (key_j > 0) {
+			if (i > 0) {
 				slope_left = slope_right = ufbxi_solve_auto_tangent(
 					prev_time, key->time, next_time,
 					key[-1].value, key->value, (ufbx_real)next_value,
@@ -15954,7 +15954,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 					if (ufbx_isnan(pre_value->constant_value.v[index])) {
 						pre_value->constant_value.v[index] = constant_value;
 					}
-					if (ufbx_fabs(pre_value->constant_value.v[index] - constant_value) > scale_epsilon) {
+					if ((ufbx_real)ufbx_fabs(pre_value->constant_value.v[index] - constant_value) > scale_epsilon) {
 						pre_value->has_constant_value = false;
 					}
 				}
@@ -15986,9 +15986,9 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 								pre_node->has_constant_scale = false;
 							} else {
 								ufbx_real error = 0.0f;
-								error += ufbx_fabs(pre_value->constant_value.x - pre_node->constant_scale.x);
-								error += ufbx_fabs(pre_value->constant_value.y - pre_node->constant_scale.y);
-								error += ufbx_fabs(pre_value->constant_value.z - pre_node->constant_scale.z);
+								error += (ufbx_real)ufbx_fabs(pre_value->constant_value.x - pre_node->constant_scale.x);
+								error += (ufbx_real)ufbx_fabs(pre_value->constant_value.y - pre_node->constant_scale.y);
+								error += (ufbx_real)ufbx_fabs(pre_value->constant_value.z - pre_node->constant_scale.z);
 								if (error >= scale_epsilon) {
 									pre_node->has_constant_scale = false;
 								}
@@ -16013,20 +16013,19 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 				}
 			}
 			if (has_unscaled_children[node->typed_id] && !node->scale_helper) {
-				ufbxi_pre_node *pre_node_unscaled_children = &pre_nodes[node->typed_id];
+				ufbxi_pre_node *pre_node = &pre_nodes[node->typed_id];
 				ufbx_real ref = uc->opts.inherit_mode_handling == UFBX_INHERIT_MODE_HANDLING_COMPENSATE
-					? pre_node_unscaled_children->constant_scale.x : (ufbx_real)1.0f;
-				ufbx_vec3 scale = pre_node_unscaled_children->constant_scale;
-				ufbx_real dx = ufbx_fabs(scale.x - ref);
-				ufbx_real dy = ufbx_fabs(scale.y - ref);
-				ufbx_real dz = ufbx_fabs(scale.z - ref);
-				if (dx + dy + dz >= scale_epsilon || !pre_node_unscaled_children->has_constant_scale || ufbx_fabs(scale.x) <= compensate_epsilon) {
+					? pre_node->constant_scale.x : (ufbx_real)1.0f;
+				ufbx_vec3 scale = pre_node->constant_scale;
+				ufbx_real dx = (ufbx_real)ufbx_fabs(scale.x - ref);
+				ufbx_real dy = (ufbx_real)ufbx_fabs(scale.y - ref);
+				ufbx_real dz = (ufbx_real)ufbx_fabs(scale.z - ref);
+				if (dx + dy + dz >= scale_epsilon || !pre_node->has_constant_scale || (ufbx_real)ufbx_fabs(scale.x) <= compensate_epsilon) {
 					ufbxi_check(ufbxi_setup_scale_helper(uc, node, fbx_id));
 
 					// If we added a geometry transform helper, we need to do it
 					// recursively for all child nodes using  `UFBX_INHERIT_MODE_COMPONENTWISE_SCALE`
-					ufbxi_pre_node *pre_node_unscaled_children_geometric_helper = &pre_nodes[node->typed_id];
-					uint32_t ix = pre_node_unscaled_children_geometric_helper->first_child;
+					uint32_t ix = pre_node->first_child;
 					size_t count = 0, max_count = num_nodes * 4;
 					while (ix != ~0u && ix != node->typed_id) {
 						// Safeguard against cyclical parents etc.
@@ -16060,7 +16059,7 @@ ufbxi_nodiscard ufbxi_noinline static int ufbxi_pre_finalize_scene(ufbxi_context
 					}
 
 				} else if (uc->opts.inherit_mode_handling == UFBX_INHERIT_MODE_HANDLING_COMPENSATE) {
-					if (ufbx_fabs(scale.x - 1.0f) >= scale_epsilon) {
+					if ((ufbx_real)ufbx_fabs(scale.x - 1.0f) >= scale_epsilon) {
 						node->is_scale_compensate_parent = true;
 					}
 				}
@@ -19966,7 +19965,6 @@ ufbxi_noinline static void ufbxi_update_node(ufbx_node *node)
 				node->local_transform.scale.z *= inherit_scale.z;
 			}
 		}
-		node->inherit_scale = node->local_transform.scale;
 		node->geometry_transform = ufbxi_get_geometry_transform(&node->props);
 	} else {
 		node->geometry_transform = ufbx_identity_transform;
@@ -19974,6 +19972,7 @@ ufbxi_noinline static void ufbxi_update_node(ufbx_node *node)
 
 	ufbx_matrix unscaled_node_to_parent = ufbxi_unscaled_transform_to_matrix(&node->local_transform);
 	node->node_to_parent = ufbx_transform_to_matrix(&node->local_transform);
+	node->inherit_scale = node->local_transform.scale;
 
 	ufbx_node *parent = node->parent;
 	if (parent) {
@@ -20610,6 +20609,7 @@ ufbxi_noinline static void ufbxi_update_adjust_transforms(ufbxi_context *uc, ufb
 		light->local_direction.z = 0.0f;
 	}
 
+	ufbx_real root_scale = ufbxi_min3(root_transform.scale);
 	ufbxi_for_ptr_list(ufbx_node, p_node, scene->nodes) {
 		ufbx_node *node = *p_node;
 
@@ -20617,8 +20617,6 @@ ufbxi_noinline static void ufbxi_update_adjust_transforms(ufbxi_context *uc, ufb
 		node->adjust_pre_rotation = ufbx_identity_quat;
 		node->adjust_pre_scale = 1.0f;
 		node->adjust_post_scale = 1.0f;
-
-		ufbx_real root_scale = root_transform.scale.x;
 
 		if (conversion == UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS) {
 			if (node->node_depth <= 1 && !node->is_root) {
@@ -23373,12 +23371,12 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_times(ufbxi_bake_context *b
 
 		const ufbx_keyframe *keys = curve->keyframes.data;
 		size_t num_keys = curve->keyframes.count;
-		for (size_t key_k = 0; key_k < num_keys; key_k++) {
-			ufbx_keyframe a = keys[key_k];
+		for (size_t key_ix = 0; key_ix < num_keys; key_ix++) {
+			ufbx_keyframe a = keys[key_ix];
 			double a_time = a.time - bc->opts.time_start_offset;
 			ufbxi_check_err(&bc->error, ufbxi_bake_push_time(bc, a_time));
-			if (key_k + 1 >= num_keys) break;
-			ufbx_keyframe b = keys[key_k + 1];
+			if (key_ix + 1 >= num_keys) break;
+			ufbx_keyframe b = keys[key_ix + 1];
 			double b_time = b.time - bc->opts.time_start_offset;
 
 			// Skip fully flat sections
@@ -23399,15 +23397,15 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_times(ufbxi_bake_context *b
 				if (duration <= min_duration) continue;
 
 				double factor = 1.0;
-				while (duration * sample_rate / factor >= bc->opts.max_keyframe_segments) {
+				while (duration * sample_rate / factor >= (double)bc->opts.max_keyframe_segments) {
 					factor *= 2.0;
 				}
 
 				double padding = 0.5 / sample_rate;
 				double start = ufbx_ceil((a_time + padding) * sample_rate / factor) * factor;
 				double stop = b_time - padding;
-				for (size_t keyframe_segments_i = 0; keyframe_segments_i < bc->opts.max_keyframe_segments; keyframe_segments_i++) {
-					double time = (start + (double)keyframe_segments_i * factor) / sample_rate;
+				for (size_t i = 0; i < bc->opts.max_keyframe_segments; i++) {
+					double time = (start + (double)i * factor) / sample_rate;
 					if (time >= stop) break;
 					ufbxi_check_err(&bc->error, ufbxi_bake_push_time(bc, time));
 				}
@@ -23460,7 +23458,7 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_finalize_bake_times(ufbxi_bake_c
 
 	// TODO: Something better
 	qsort(times, num_times, sizeof(double), &ufbxi_cmp_double);
-	
+
 	// Deduplicate times
 	{
 		size_t dst = 0, src = 0;
@@ -23837,22 +23835,17 @@ ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_node_imp(ufbxi_bake_context
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_node(ufbxi_bake_context *bc, uint32_t element_id, ufbxi_bake_prop *props, size_t count)
 {
-    int result = ufbxi_bake_node_imp(bc, element_id, props, count);
-    if (result != 1) {
-        return result;
-    }
+	ufbxi_check_err(&bc->error, ufbxi_bake_node_imp(bc, element_id, props, count));
 
-    // Baking a node may cause further nodes to be baked, so keep going
-    // until all dependencies are baked.
-    while (bc->tmp_bake_stack.num_items > 0) {
-        uint32_t child_id = 0;
-        ufbxi_pop(&bc->tmp_bake_stack, uint32_t, 1, &child_id);
-        result = ufbxi_bake_node_imp(bc, child_id, NULL, 0);
-        if (result != 1) {
-            return result;
-        }
-    }
-    return 1;
+	// Baking a node may cause further nodes to be baked, so keep going
+	// until all dependencies are baked.
+	while (bc->tmp_bake_stack.num_items > 0) {
+		uint32_t child_id = 0;
+		ufbxi_pop(&bc->tmp_bake_stack, uint32_t, 1, &child_id);
+		ufbxi_check_err(&bc->error, ufbxi_bake_node_imp(bc, child_id, NULL, 0));
+	}
+
+	return 1;
 }
 
 ufbxi_nodiscard static ufbxi_noinline int ufbxi_bake_anim_prop(ufbxi_bake_context *bc, ufbx_element *element, const char *prop_name, ufbxi_bake_prop *props, size_t count)
@@ -27334,7 +27327,7 @@ ufbx_abi ufbxi_noinline ufbx_transform ufbx_evaluate_transform(const ufbx_anim *
 	return ufbx_evaluate_transform_flags(anim, node, time, 0);
 }
 
-ufbx_abi ufbxi_noinline ufbx_transform ufbx_evaluate_transform_flags(const ufbx_anim *anim, const ufbx_node *node, double time, ufbx_transform_flags flags)
+ufbx_abi ufbxi_noinline ufbx_transform ufbx_evaluate_transform_flags(const ufbx_anim *anim, const ufbx_node *node, double time, uint32_t flags)
 {
 	ufbx_assert(anim);
 	ufbx_assert(node);
@@ -27529,7 +27522,7 @@ ufbx_abi void ufbx_retain_baked_anim(ufbx_baked_anim *bake)
 	ufbxi_baked_anim_imp *imp = ufbxi_get_imp(ufbxi_baked_anim_imp, bake);
 	ufbx_assert(imp->magic == UFBXI_BAKED_ANIM_IMP_MAGIC);
 	if (imp->magic != UFBXI_BAKED_ANIM_IMP_MAGIC) return;
-	ufbxi_release_ref(&imp->refcount);
+	ufbxi_retain_ref(&imp->refcount);
 }
 
 ufbx_abi void ufbx_free_baked_anim(ufbx_baked_anim *bake)
@@ -27539,7 +27532,7 @@ ufbx_abi void ufbx_free_baked_anim(ufbx_baked_anim *bake)
 	ufbxi_baked_anim_imp *imp = ufbxi_get_imp(ufbxi_baked_anim_imp, bake);
 	ufbx_assert(imp->magic == UFBXI_BAKED_ANIM_IMP_MAGIC);
 	if (imp->magic != UFBXI_BAKED_ANIM_IMP_MAGIC) return;
-	ufbxi_retain_ref(&imp->refcount);
+	ufbxi_release_ref(&imp->refcount);
 }
 
 ufbx_abi ufbx_vec3 ufbx_evaluate_baked_vec3(ufbx_baked_vec3_list keyframes, double time)
