@@ -1145,7 +1145,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 			}
 
 			// Multiply the albedo alpha with the transparency texture if necessary
-			if (albedo_texture.is_valid() && transparency_texture.is_valid()) {
+			if (albedo_texture.is_valid() && transparency_texture.is_valid() && albedo_texture != transparency_texture) {
 				Pair<uint64_t, uint64_t> key = { albedo_texture->get_rid().get_id(), transparency_texture->get_rid().get_id() };
 				FBXTextureIndex *texture_index_ptr = p_state->albedo_transparency_textures.getptr(key);
 				if (texture_index_ptr != nullptr) {
