@@ -737,6 +737,7 @@ typedef enum ufbx_inherit_mode UFBX_ENUM_REPR {
 	// Ignore parent scale when computing the transform: `R*r*s`.
 	//   ufbx_transform t = node.local_transform;
 	//   t.translation *= parent.inherit_scale;
+	//   t.scale *= node.inherit_scale_node.inherit_scale;
 	//   child.node_to_world = parent.unscaled_node_to_world * t;
 	// Also known as "Segment scale compensate" in some software.
 	UFBX_INHERIT_MODE_IGNORE_PARENT_SCALE,
@@ -744,7 +745,7 @@ typedef enum ufbx_inherit_mode UFBX_ENUM_REPR {
 	// Apply parent scale component-wise: `R*r*S*s`.
 	//   ufbx_transform t = node.local_transform;
 	//   t.translation *= parent.inherit_scale;
-	//   t.scale *= parent.inherit_scale;
+	//   t.scale *= node.inherit_scale_node.inherit_scale;
 	//   child.node_to_world = parent.unscaled_node_to_world * t;
 	UFBX_INHERIT_MODE_COMPONENTWISE_SCALE,
 
@@ -818,6 +819,13 @@ struct ufbx_node {
 	// Combined scale when using `UFBX_INHERIT_MODE_COMPONENTWISE_SCALE`.
 	// Contains `local_transform.scale` otherwise.
 	ufbx_vec3 inherit_scale;
+
+	// Node where scale is inherited from for `UFBX_INHERIT_MODE_COMPONENTWISE_SCALE`
+	// and even for `UFBX_INHERIT_MODE_IGNORE_PARENT_SCALE`.
+	// For componentwise-scale nodes, this will point to `parent`, for scale ignoring
+	// nodes this will point to the parent of the nearest componentwise-scaled node
+	// in the parent chain.
+	ufbx_nullable ufbx_node *inherit_scale_node;
 
 	// Raw Euler angles in degrees for those who want them
 
@@ -2834,6 +2842,13 @@ typedef struct ufbx_prop_override {
 
 UFBX_LIST_TYPE(ufbx_prop_override_list, ufbx_prop_override);
 
+typedef struct ufbx_transform_override {
+	uint32_t node_id;
+	ufbx_transform transform;
+} ufbx_transform_override;
+
+UFBX_LIST_TYPE(ufbx_transform_override_list, ufbx_transform_override);
+
 // Animation descriptor used for evaluating animation.
 // Usually obtained from `ufbx_scene` via either global animation `ufbx_scene.anim`,
 // per-stack animation `ufbx_anim_stack.anim` or per-layer animation `ufbx_anim_layer.anim`.
@@ -2853,7 +2868,10 @@ typedef struct ufbx_anim {
 	ufbx_real_list override_layer_weights;
 
 	// Sorted by `element_id, prop_name`
-	ufbx_prop_override_list overrides;
+	ufbx_prop_override_list prop_overrides;
+
+	// Sorted by `node_id`
+	ufbx_transform_override_list transform_overrides;
 
 	// Evaluate connected properties as if they would not be connected.
 	bool ignore_connections;
@@ -3993,10 +4011,12 @@ typedef enum ufbx_inherit_mode_handling UFBX_ENUM_REPR {
 
 	UFBX_INHERIT_MODE_HANDLING_COMPENSATE,
 
+	UFBX_INHERIT_MODE_HANDLING_IGNORE,
+
 	UFBX_ENUM_FORCE_WIDTH(UFBX_INHERIT_MODE_HANDLING)
 } ufbx_inherit_mode_handling;
 
-UFBX_ENUM_TYPE(ufbx_inherit_mode_handling, UFBX_INHERIT_MODE_HANDLING, UFBX_INHERIT_MODE_HANDLING_COMPENSATE);
+UFBX_ENUM_TYPE(ufbx_inherit_mode_handling, UFBX_INHERIT_MODE_HANDLING, UFBX_INHERIT_MODE_HANDLING_IGNORE);
 
 // Specify how unit / coordinate system conversion should be performed.
 // Affects how `ufbx_load_opts.target_axes` and `ufbx_load_opts.target_unit_meters` work,
@@ -4305,6 +4325,8 @@ typedef struct ufbx_prop_override_desc {
 
 UFBX_LIST_TYPE(ufbx_const_prop_override_desc_list, const ufbx_prop_override_desc);
 
+UFBX_LIST_TYPE(ufbx_const_transform_override_list, const ufbx_transform_override);
+
 typedef struct ufbx_anim_opts {
 	uint32_t _begin_zero;
 
@@ -4315,7 +4337,10 @@ typedef struct ufbx_anim_opts {
 	ufbx_const_real_list override_layer_weights;
 
 	// Property overrides
-	ufbx_const_prop_override_desc_list overrides;
+	ufbx_const_prop_override_desc_list prop_overrides;
+
+	// Transform overrides
+	ufbx_const_transform_override_list transform_overrides;
 
 	// Ignore connected properties
 	bool ignore_connections;
