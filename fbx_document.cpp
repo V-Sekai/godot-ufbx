@@ -1205,7 +1205,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 
 				if (alpha_mode == Image::ALPHA_BLEND) {
 					material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS);
-				} else if (alpha_mode == Image::ALPHA_BLEND) {
+				} else if (alpha_mode == Image::ALPHA_BIT) {
 					material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
 				}
 				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, albedo_texture);
