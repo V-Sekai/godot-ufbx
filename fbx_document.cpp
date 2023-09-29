@@ -897,12 +897,17 @@ Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, con
 		r_image->load_png_from_buffer(p_bytes);
 	} else if (filename_lower.ends_with(".jpg")) {
 		r_image->load_jpg_from_buffer(p_bytes);
+	} else if (filename_lower.ends_with(".tga")) {
+		r_image->load_tga_from_buffer(p_bytes);
 	}
-	// If we didn't pass the above tests, we attempt loading as PNG and then JPEG directly.
+	// If we didn't pass the above tests, try loading as each option.
 	if (r_image->is_empty()) { // Try PNG first.
 		r_image->load_png_from_buffer(p_bytes);
 	}
 	if (r_image->is_empty()) { // And then JPEG.
+		r_image->load_jpg_from_buffer(p_bytes);
+	}
+	if (r_image->is_empty()) { // And then TGA.
 		r_image->load_jpg_from_buffer(p_bytes);
 	}
 	// If it still can't be loaded, give up and insert an empty image as placeholder.
