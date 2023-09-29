@@ -1128,7 +1128,7 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 
 			Ref<Texture2D> albedo_texture = _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC);
 
-			// Search for transparency map 
+			// Search for transparency map.
 			Ref<Texture2D> transparency_texture;
 			const ufbx_texture *transparency_sources[] = {
 				fbx_material->pbr.opacity.texture,
