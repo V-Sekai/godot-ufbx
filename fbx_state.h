@@ -79,6 +79,9 @@ class FBXState : public Resource {
 	Vector<String> extensions_required;
 	Vector<Ref<Image>> source_images;
 
+	HashMap<uint64_t, Image::AlphaMode> alpha_mode_cache;
+	HashMap<Pair<uint64_t, uint64_t>, FBXTextureIndex, PairHash<uint64_t, uint64_t>> albedo_transparency_textures;
+
 	Vector<Ref<FBXSkin>> skins;
 	HashSet<String> unique_names;
 	HashSet<String> unique_animation_names;
