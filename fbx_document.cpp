@@ -38,8 +38,10 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/file_access_memory.h"
+#include "core/io/image.h"
 #include "core/io/json.h"
 #include "core/io/stream_peer.h"
+#include "core/math/color.h"
 #include "core/math/disjoint_set.h"
 #include "core/string/print_string.h"
 #include "core/version.h"
@@ -51,6 +53,7 @@
 #include "scene/3d/mesh_instance_3d.h"
 #include "scene/3d/multimesh_instance_3d.h"
 #include "scene/resources/image_texture.h"
+#include "scene/resources/material.h"
 #include "scene/resources/portable_compressed_texture.h"
 #include "scene/resources/skin.h"
 #include "scene/resources/surface_tool.h"
@@ -192,6 +195,19 @@ static const ufbx_texture *_get_file_texture(const ufbx_texture *p_texture) {
 		}
 	}
 	return nullptr;
+}
+
+static Ref<Image> _get_decompressed_image(Ref<Texture2D> texture) {
+	if (texture.is_null()) {
+		return Ref<Image>();
+	}
+	Ref<Image> image = texture->get_image();
+	if (image.is_null()) {
+		return Ref<Image>();
+	}
+	image = image->duplicate();
+	image->decompress();
+	return image;
 }
 
 static Vector<Vector2> _decode_vertex_attrib_vec2(const ufbx_vertex_vec2 &p_attrib, const Vector<uint32_t> &p_indices) {
@@ -881,12 +897,17 @@ Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, con
 		r_image->load_png_from_buffer(p_bytes);
 	} else if (filename_lower.ends_with(".jpg")) {
 		r_image->load_jpg_from_buffer(p_bytes);
+	} else if (filename_lower.ends_with(".tga")) {
+		r_image->load_tga_from_buffer(p_bytes);
 	}
-	// If we didn't pass the above tests, we attempt loading as PNG and then JPEG directly.
+	// If we didn't pass the above tests, try loading as each option.
 	if (r_image->is_empty()) { // Try PNG first.
 		r_image->load_png_from_buffer(p_bytes);
 	}
 	if (r_image->is_empty()) { // And then JPEG.
+		r_image->load_jpg_from_buffer(p_bytes);
+	}
+	if (r_image->is_empty()) { // And then TGA.
 		r_image->load_jpg_from_buffer(p_bytes);
 	}
 	// If it still can't be loaded, give up and insert an empty image as placeholder.
@@ -896,20 +917,29 @@ Ref<Image> FBXDocument::_parse_image_bytes_into_image(Ref<FBXState> p_state, con
 	return r_image;
 }
 
-void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image) {
+FBXImageIndex FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image) {
 	FBXState::FBXHandleBinary handling = FBXState::FBXHandleBinary(p_state->handle_binary_image);
 	if (p_image->is_empty() || handling == FBXState::FBXHandleBinary::HANDLE_BINARY_DISCARD_TEXTURES) {
+		if (p_index < 0) {
+			return -1;
+		}
 		p_state->images.push_back(Ref<Texture2D>());
 		p_state->source_images.push_back(Ref<Image>());
-		return;
+		return p_state->images.size() - 1;
 	}
 #ifdef TOOLS_ENABLED
 	if (Engine::get_singleton()->is_editor_hint() && handling == FBXState::FBXHandleBinary::HANDLE_BINARY_EXTRACT_TEXTURES) {
 		if (p_state->base_path.is_empty()) {
+			if (p_index < 0) {
+				return -1;
+			}
 			p_state->images.push_back(Ref<Texture2D>());
 			p_state->source_images.push_back(Ref<Image>());
 		} else if (p_image->get_name().is_empty()) {
-			WARN_PRINT(vformat("glTF: Image index '%d' couldn't be named. Skipping it.", p_index));
+			if (p_index < 0) {
+				return -1;
+			}
+			WARN_PRINT(vformat("FBX: Image index '%d' couldn't be named. Skipping it.", p_index));
 			p_state->images.push_back(Ref<Texture2D>());
 			p_state->source_images.push_back(Ref<Image>());
 		} else {
@@ -942,11 +972,11 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 				if (p_file_extension.is_empty()) {
 					// If a file extension was not specified, save the image data to a PNG file.
 					err = p_image->save_png(file_path);
-					ERR_FAIL_COND(err != OK);
+					ERR_FAIL_COND_V(err != OK, -1);
 				} else {
 					// If a file extension was specified, save the original bytes to a file with that extension.
 					Ref<FileAccess> file = FileAccess::open(file_path, FileAccess::WRITE, &err);
-					ERR_FAIL_COND(err != OK);
+					ERR_FAIL_COND_V(err != OK, -1);
 					file->store_buffer(p_bytes);
 					file->close();
 				}
@@ -961,14 +991,16 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 			if (saved_image.is_valid()) {
 				p_state->images.push_back(saved_image);
 				p_state->source_images.push_back(saved_image->get_image());
+			} else if (p_index < 0) {
+				return -1;
 			} else {
-				WARN_PRINT(vformat("glTF: Image index '%d' couldn't be loaded with the name: %s. Skipping it.", p_index, p_image->get_name()));
+				WARN_PRINT(vformat("FBX: Image index '%d' couldn't be loaded with the name: %s. Skipping it.", p_index, p_image->get_name()));
 				// Placeholder to keep count.
 				p_state->images.push_back(Ref<Texture2D>());
 				p_state->source_images.push_back(Ref<Image>());
 			}
 		}
-		return;
+		return p_state->images.size() - 1;
 	}
 #endif // TOOLS_ENABLED
 	if (handling == FBXState::FBXHandleBinary::HANDLE_BINARY_EMBED_AS_BASISU) {
@@ -979,7 +1011,7 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 		tex->create_from_image(p_image, PortableCompressedTexture2D::COMPRESSION_MODE_BASIS_UNIVERSAL);
 		p_state->images.push_back(tex);
 		p_state->source_images.push_back(p_image);
-		return;
+		return p_state->images.size() - 1;
 	}
 	// This handles the case of HANDLE_BINARY_EMBED_AS_UNCOMPRESSED, and it also serves
 	// as a fallback for HANDLE_BINARY_EXTRACT_TEXTURES when this is not the editor.
@@ -989,6 +1021,7 @@ void FBXDocument::_parse_image_save_image(Ref<FBXState> p_state, const Vector<ui
 	tex->set_image(p_image);
 	p_state->images.push_back(tex);
 	p_state->source_images.push_back(p_image);
+	return p_state->images.size() - 1;
 }
 
 Error FBXDocument::_parse_images(Ref<FBXState> p_state, const String &p_base_path) {
@@ -1080,19 +1113,107 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 		Dictionary material_extensions;
 
 		if (fbx_material->pbr.base_color.has_value) {
-			material->set_albedo(_material_color(fbx_material->pbr.base_color, fbx_material->pbr.base_factor));
+			Color albedo = _material_color(fbx_material->pbr.base_color, fbx_material->pbr.base_factor);
+			material->set_albedo(albedo);
+		}
+
+		if (fbx_material->features.double_sided.enabled) {
+			material->set_cull_mode(BaseMaterial3D::CULL_DISABLED);
 		}
 
 		const ufbx_texture *base_texture = _get_file_texture(fbx_material->pbr.base_color.texture);
 		if (base_texture) {
-			{
-				bool wrap = base_texture->wrap_u == UFBX_WRAP_REPEAT && base_texture->wrap_v == UFBX_WRAP_REPEAT;
-				material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, wrap);
-				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC));
+			bool wrap = base_texture->wrap_u == UFBX_WRAP_REPEAT && base_texture->wrap_v == UFBX_WRAP_REPEAT;
+			material->set_flag(BaseMaterial3D::FLAG_USE_TEXTURE_REPEAT, wrap);
+
+			Ref<Texture2D> albedo_texture = _get_texture(p_state, FBXTextureIndex(base_texture->file_index), TEXTURE_TYPE_GENERIC);
+
+			// Search for transparency map 
+			Ref<Texture2D> transparency_texture;
+			const ufbx_texture *transparency_sources[] = {
+				fbx_material->pbr.opacity.texture,
+				fbx_material->fbx.transparency_color.texture,
+			};
+			for (const ufbx_texture *transparency_source : transparency_sources) {
+				const ufbx_texture *fbx_transparency_texture = _get_file_texture(transparency_source);
+				if (fbx_transparency_texture) {
+					transparency_texture = _get_texture(p_state, FBXTextureIndex(fbx_transparency_texture->file_index), TEXTURE_TYPE_GENERIC);
+					if (transparency_texture.is_valid()) {
+						break;
+					}
+				}
 			}
-			if (!fbx_material->pbr.base_color.has_value) {
-				material->set_albedo(Color(1, 1, 1));
+
+			// Multiply the albedo alpha with the transparency texture if necessary
+			if (albedo_texture.is_valid() && transparency_texture.is_valid() && albedo_texture != transparency_texture) {
+				Pair<uint64_t, uint64_t> key = { albedo_texture->get_rid().get_id(), transparency_texture->get_rid().get_id() };
+				FBXTextureIndex *texture_index_ptr = p_state->albedo_transparency_textures.getptr(key);
+				if (texture_index_ptr != nullptr) {
+					if (*texture_index_ptr >= 0) {
+						albedo_texture = _get_texture(p_state, *texture_index_ptr, TEXTURE_TYPE_GENERIC);
+					}
+				} else {
+					Ref<Image> albedo_image = _get_decompressed_image(albedo_texture);
+					Ref<Image> transparency_image = _get_decompressed_image(transparency_texture);
+
+					if (albedo_image.is_valid() && transparency_image.is_valid()) {
+						albedo_image->convert(Image::Format::FORMAT_RGBA8);
+						transparency_image->resize(albedo_texture->get_width(), albedo_texture->get_height(), Image::INTERPOLATE_LANCZOS);
+						for (int y = 0; y < albedo_image->get_height(); y++) {
+							for (int x = 0; x < albedo_image->get_width(); x++) {
+								Color albedo_pixel = albedo_image->get_pixel(x, y);
+								Color transparency_pixel = transparency_image->get_pixel(x, y);
+								albedo_pixel.a *= transparency_pixel.r;
+								albedo_image->set_pixel(x, y, albedo_pixel);
+							}
+						}
+
+						albedo_image->clear_mipmaps();
+						albedo_image->generate_mipmaps();
+
+						albedo_image->set_name(vformat("alpha_%d", p_state->albedo_transparency_textures.size()));
+
+						FBXImageIndex new_image = _parse_image_save_image(p_state, PackedByteArray(), "", -1, albedo_image);
+						if (new_image >= 0) {
+							Ref<FBXTexture> new_texture;
+							new_texture.instantiate();
+							new_texture->set_src_image(FBXImageIndex(new_image));
+							p_state->textures.push_back(new_texture);
+
+							FBXTextureIndex texture_index = p_state->textures.size() - 1;
+							p_state->albedo_transparency_textures[key] = texture_index;
+
+							albedo_texture = _get_texture(p_state, texture_index, TEXTURE_TYPE_GENERIC);
+						} else {
+							WARN_PRINT(vformat("FBX: Could not save modified albedo texture from RID (%d, %d).", key.first, key.second));
+							p_state->albedo_transparency_textures[key] = -1;
+						}
+					}
+				}
 			}
+
+			Image::AlphaMode alpha_mode;
+			if (albedo_texture.is_valid()) {
+				Image::AlphaMode *alpha_mode_ptr = p_state->alpha_mode_cache.getptr(albedo_texture->get_rid().get_id());
+				if (alpha_mode_ptr != nullptr) {
+					alpha_mode = *alpha_mode_ptr;
+				} else {
+					Ref<Image> albedo_image = _get_decompressed_image(albedo_texture);
+					alpha_mode = albedo_image->detect_alpha();
+					p_state->alpha_mode_cache[albedo_texture->get_rid().get_id()] = alpha_mode;
+				}
+
+				if (alpha_mode == Image::ALPHA_BLEND) {
+					material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_DEPTH_PRE_PASS);
+				} else if (alpha_mode == Image::ALPHA_BLEND) {
+					material->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA_SCISSOR);
+				}
+				material->set_texture(BaseMaterial3D::TEXTURE_ALBEDO, albedo_texture);
+			}
+
+			// Combined textures and factors are very unreliable in FBX
+			material->set_albedo(Color(1, 1, 1));
+
 			// TODO: Does not support rotation, could be inverted?
 			material->set_uv1_offset(_as_vec3(base_texture->uv_transform.translation));
 			Vector3 scale = _as_vec3(base_texture->uv_transform.scale);
@@ -1116,12 +1237,14 @@ Error FBXDocument::_parse_materials(Ref<FBXState> p_state) {
 			if (metalness_texture) {
 				material->set_texture(BaseMaterial3D::TEXTURE_METALLIC, _get_texture(p_state, FBXTextureIndex(metalness_texture->file_index), TEXTURE_TYPE_GENERIC));
 				material->set_metallic_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
+				material->set_metallic(1.0);
 			}
 
 			const ufbx_texture *roughness_texture = _get_file_texture(fbx_material->pbr.roughness.texture);
 			if (roughness_texture) {
 				material->set_texture(BaseMaterial3D::TEXTURE_ROUGHNESS, _get_texture(p_state, FBXTextureIndex(roughness_texture->file_index), TEXTURE_TYPE_GENERIC));
 				material->set_roughness_texture_channel(BaseMaterial3D::TEXTURE_CHANNEL_RED);
+				material->set_roughness(1.0);
 			}
 		}
 

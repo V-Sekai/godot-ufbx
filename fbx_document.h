@@ -75,7 +75,7 @@ private:
 			const FBXTextureIndex p_texture, int p_texture_type);
 	Error _parse_meshes(Ref<FBXState> p_state);
 	Ref<Image> _parse_image_bytes_into_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_filename, int p_index);
-	void _parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image);
+	FBXImageIndex _parse_image_save_image(Ref<FBXState> p_state, const Vector<uint8_t> &p_bytes, const String &p_file_extension, int p_index, Ref<Image> p_image);
 	Error _parse_images(Ref<FBXState> p_state, const String &p_base_path);
 	Error _parse_materials(Ref<FBXState> p_state);
 	FBXNodeIndex _find_highest_node(Ref<FBXState> p_state,
