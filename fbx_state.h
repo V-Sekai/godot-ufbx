@@ -83,6 +83,7 @@ class FBXState : public Resource {
 	HashMap<Pair<uint64_t, uint64_t>, FBXTextureIndex, PairHash<uint64_t, uint64_t>> albedo_transparency_textures;
 
 	Vector<Ref<FBXSkin>> skins;
+	Vector<FBXSkinIndex> skin_indices;
 	HashSet<String> unique_names;
 	HashSet<String> unique_animation_names;
 

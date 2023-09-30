@@ -670,12 +670,15 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 				}
 
 				int32_t num_skin_weights = 0;
-				ufbx_skin_deformer *fbx_skin = nullptr;
-				if (fbx_mesh->skin_deformers.count > 0) {
-					fbx_skin = fbx_mesh->skin_deformers[0];
+
+				// Find the first imported skin deformer
+				for (ufbx_skin_deformer *fbx_skin : fbx_mesh->skin_deformers) {
+					FBXSkinIndex skin_i = p_state->skin_indices[fbx_skin->typed_id];
+					if (skin_i < 0) {
+						continue;
+					}
 
 					// Tag all nodes to use the skin
-					FBXSkinIndex skin_i = FBXSkinIndex(fbx_skin->typed_id);
 					for (const ufbx_node *node : fbx_mesh->instances) {
 						p_state->nodes[node->typed_id]->skin = skin_i;
 					}
@@ -720,6 +723,9 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					}
 					array[Mesh::ARRAY_BONES] = bones;
 					array[Mesh::ARRAY_WEIGHTS] = weights;
+
+					// Only use the first found skin
+					break;
 				}
 
 				bool generate_tangents = (primitive == Mesh::PRIMITIVE_TRIANGLES && !array[Mesh::ARRAY_TANGENT] && array[Mesh::ARRAY_TEX_UV] && array[Mesh::ARRAY_NORMAL]);
@@ -1522,6 +1528,13 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 	// Create the base skins, and mark nodes that are joints
 	for (const ufbx_skin_deformer *fbx_skin : fbx_scene->skin_deformers) {
+
+		// Do not create skins for skin deformers with zero clusters
+		if (fbx_skin->clusters.count == 0) {
+			p_state->skin_indices.push_back(-1);
+			continue;
+		}
+
 		Ref<FBXSkin> skin;
 		skin.instantiate();
 
@@ -1542,6 +1555,7 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 			skin->set_name(vformat("skin_%s", itos(fbx_skin->typed_id)));
 		}
 
+		p_state->skin_indices.push_back(p_state->skins.size());
 		p_state->skins.push_back(skin);
 	}
 
@@ -1575,7 +1589,7 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 		ERR_FAIL_COND_V(_verify_skin(p_state, skin), ERR_PARSE_ERROR);
 	}
 
-	print_verbose("glTF: Total skins: " + itos(p_state->skins.size()));
+	print_verbose("FBX: Total skins: " + itos(p_state->skins.size()));
 
 	return OK;
 }
