@@ -1528,7 +1528,6 @@ Error FBXDocument::_parse_skins(Ref<FBXState> p_state) {
 	const ufbx_scene *fbx_scene = p_state->scene.get();
 	// Create the base skins, and mark nodes that are joints
 	for (const ufbx_skin_deformer *fbx_skin : fbx_scene->skin_deformers) {
-
 		// Do not create skins for skin deformers with zero clusters
 		if (fbx_skin->clusters.count == 0) {
 			p_state->skin_indices.push_back(-1);
