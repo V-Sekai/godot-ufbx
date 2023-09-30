@@ -694,35 +694,34 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 						uint32_t fbx_vertex_index = fbx_mesh->vertex_indices[indices[vertex_i]];
 						ufbx_skin_vertex skin_vertex = fbx_skin->vertices[fbx_vertex_index];
 						float total_weight = 0.0f;
-						for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
+						int32_t num_weights = MIN(int32_t(skin_vertex.num_weights), num_skin_weights);
+						for (int32_t i = 0; i < num_weights; i++) {
 							ufbx_skin_weight skin_weight = fbx_skin->weights[skin_vertex.weight_begin + i];
-
 							int index = vertex_i * num_skin_weights + i;
-							if (index < bones.size() && index < weights.size()) {
-								bones.write[index] = int(skin_weight.cluster_index);
-								weights.write[index] = float(skin_weight.weight);
-								total_weight += float(skin_weight.weight);
-							}
+							float weight = float(skin_weight.weight);
+							bones.write[index] = int(skin_weight.cluster_index);
+							weights.write[index] = weight;
+							total_weight += weight;
 						}
 						if (total_weight > 0.0f) {
-							for (int32_t i = 0; i < int32_t(skin_vertex.num_weights); i++) {
+							for (int32_t i = 0; i < num_weights; i++) {
 								int index = vertex_i * num_skin_weights + i;
-								if (index < weights.size()) {
-									weights.write[index] /= total_weight;
-								}
+								weights.write[index] /= total_weight;
 							}
 						}
 						// Pad the rest with empty weights
-						for (int32_t i = int32_t(skin_vertex.num_weights); i < num_skin_weights; i++) {
+						for (int32_t i = num_weights; i < num_skin_weights; i++) {
 							int index = vertex_i * num_skin_weights + i;
-							if (index < bones.size() && index < weights.size()) {
-								bones.write[index] = 0; // TODO: What should this be padded with?
-								weights.write[index] = 0.0f;
-							}
+							bones.write[index] = 0; // TODO: What should this be padded with?
+							weights.write[index] = 0.0f;
 						}
 					}
 					array[Mesh::ARRAY_BONES] = bones;
 					array[Mesh::ARRAY_WEIGHTS] = weights;
+
+					if (num_skin_weights == 8) {
+						flags |= Mesh::ARRAY_FLAG_USE_8_BONE_WEIGHTS;
+					}
 
 					// Only use the first found skin
 					break;
@@ -3072,6 +3071,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.scale_helper_name.length = SIZE_MAX;
 	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
+	opts.clean_skin_weights = true;
 	if (p_state->discard_meshes_and_materials) {
 		opts.ignore_geometry = true;
 		opts.ignore_embedded = true;
