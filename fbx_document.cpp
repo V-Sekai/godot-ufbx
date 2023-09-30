@@ -2120,7 +2120,7 @@ BoneAttachment3D *FBXDocument::_generate_bone_attachment(Ref<FBXState> p_state, 
 	Ref<FBXNode> fbx_node = p_state->nodes[p_node_index];
 	Ref<FBXNode> bone_node = p_state->nodes[p_bone_index];
 	BoneAttachment3D *bone_attachment = memnew(BoneAttachment3D);
-	print_verbose("glTF: Creating bone attachment for: " + fbx_node->get_name());
+	print_verbose("FBX: Creating bone attachment for: " + fbx_node->get_name());
 
 	ERR_FAIL_COND_V(!bone_node->joint, nullptr);
 
@@ -2171,7 +2171,7 @@ ImporterMeshInstance3D *FBXDocument::_generate_mesh_instance(Ref<FBXState> p_sta
 	ERR_FAIL_INDEX_V(fbx_node->mesh, p_state->meshes.size(), nullptr);
 
 	ImporterMeshInstance3D *mi = memnew(ImporterMeshInstance3D);
-	print_verbose("glTF: Creating mesh for: " + fbx_node->get_name());
+	print_verbose("FBX: Creating mesh for: " + fbx_node->get_name());
 
 	p_state->scene_mesh_instances.insert(p_node_index, mi);
 	Ref<FBXMesh> mesh = p_state->meshes.write[fbx_node->mesh];
@@ -2197,7 +2197,7 @@ Node3D *FBXDocument::_generate_spatial(Ref<FBXState> p_state, const FBXNodeIndex
 	Ref<FBXNode> fbx_node = p_state->nodes[p_node_index];
 
 	Node3D *spatial = memnew(Node3D);
-	print_verbose("glTF: Converting spatial: " + fbx_node->get_name());
+	print_verbose("FBX: Converting spatial: " + fbx_node->get_name());
 
 	return spatial;
 }
@@ -2318,7 +2318,7 @@ void FBXDocument::_create_fbx_node(Ref<FBXState> p_state, Node *p_scene_parent, 
 void FBXDocument::_convert_animation_player_to_fbx(AnimationPlayer *p_animation_player, Ref<FBXState> p_state, FBXNodeIndex p_gltf_current, FBXNodeIndex p_gltf_root_index, Ref<FBXNode> p_gltf_node, Node *p_scene_parent) {
 	ERR_FAIL_COND(!p_animation_player);
 	p_state->animation_players.push_back(p_animation_player);
-	print_verbose(String("glTF: Converting animation player: ") + p_animation_player->get_name());
+	print_verbose(String("FBX: Converting animation player: ") + p_animation_player->get_name());
 }
 
 void FBXDocument::_check_visibility(Node *p_node, bool &r_retflag) {
@@ -2601,7 +2601,7 @@ void FBXDocument::_generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXN
 	if (active_skeleton != skeleton) {
 		if (active_skeleton) {
 			// Should no longer be possible.
-			ERR_PRINT(vformat("glTF: Generating scene detected direct parented Skeletons at node %d", p_node_index));
+			ERR_PRINT(vformat("FBX: Generating scene detected direct parented Skeletons at node %d", p_node_index));
 			BoneAttachment3D *bone_attachment = _generate_bone_attachment(p_state, active_skeleton, p_node_index, fbx_node->parent);
 			p_scene_parent->add_child(bone_attachment, true);
 			bone_attachment->set_owner(p_scene_root);
