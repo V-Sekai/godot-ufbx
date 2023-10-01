@@ -112,7 +112,6 @@ private:
 public:
 	Error append_from_file(String p_path, Ref<FBXState> p_state, uint32_t p_flags = 0, String p_base_path = String());
 	Error append_from_buffer(PackedByteArray p_bytes, String p_base_path, Ref<FBXState> p_state, uint32_t p_flags = 0);
-	Error append_from_scene(Node *p_node, Ref<FBXState> p_state, uint32_t p_flags = 0);
 
 public:
 	Node *generate_scene(Ref<FBXState> p_state, float p_bake_fps = 30.0f, bool p_trimming = false, bool p_remove_immutable_tracks = true);
@@ -124,55 +123,6 @@ public:
 	void _generate_skeleton_bone_node(Ref<FBXState> p_state, const FBXNodeIndex p_node_index, Node *p_scene_parent, Node *p_scene_root);
 	void _import_animation(Ref<FBXState> p_state, AnimationPlayer *p_animation_player,
 			const FBXAnimationIndex p_index, const float p_bake_fps, const bool p_trimming, const bool p_remove_immutable_tracks);
-	void _convert_mesh_instances(Ref<FBXState> p_state);
-	void _convert_spatial(Ref<FBXState> p_state, Node3D *p_spatial, Ref<FBXNode> p_node);
-	void _convert_scene_node(Ref<FBXState> p_state, Node *p_current,
-			const FBXNodeIndex p_fbx_current,
-			const FBXNodeIndex p_fbx_root);
-
-#ifdef MODULE_CSG_ENABLED
-	void _convert_csg_shape_to_fbx(CSGShape3D *p_current, FBXNodeIndex p_gltf_parent, Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
-#endif // MODULE_CSG_ENABLED
-
-	void _create_fbx_node(Ref<FBXState> p_state,
-			Node *p_scene_parent,
-			FBXNodeIndex p_current_node_i,
-			FBXNodeIndex p_parent_node_index,
-			FBXNodeIndex p_root_gltf_node,
-			Ref<FBXNode> p_gltf_node);
-	void _convert_animation_player_to_fbx(
-			AnimationPlayer *p_animation_player, Ref<FBXState> p_state,
-			FBXNodeIndex p_gltf_current,
-			FBXNodeIndex p_gltf_root_index,
-			Ref<FBXNode> p_gltf_node, Node *p_scene_parent);
-	void _check_visibility(Node *p_node, bool &r_retflag);
-#ifdef MODULE_GRIDMAP_ENABLED
-	void _convert_grid_map_to_fbx(
-			GridMap *p_grid_map,
-			FBXNodeIndex p_parent_node_index,
-			FBXNodeIndex p_root_node_index,
-			Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
-#endif // MODULE_GRIDMAP_ENABLED
-	void _convert_multi_mesh_instance_to_fbx(
-			MultiMeshInstance3D *p_multi_mesh_instance,
-			FBXNodeIndex p_parent_node_index,
-			FBXNodeIndex p_root_node_index,
-			Ref<FBXNode> p_gltf_node, Ref<FBXState> p_state);
-	void _convert_skeleton_to_fbx(
-			Skeleton3D *p_scene_parent, Ref<FBXState> p_state,
-			FBXNodeIndex p_parent_node_index,
-			FBXNodeIndex p_root_node_index,
-			Ref<FBXNode> p_gltf_node);
-	void _convert_bone_attachment_to_fbx(BoneAttachment3D *p_bone_attachment,
-			Ref<FBXState> p_state,
-			FBXNodeIndex p_parent_node_index,
-			FBXNodeIndex p_root_node_index,
-			Ref<FBXNode> p_gltf_node);
-	void _convert_mesh_instance_to_fbx(MeshInstance3D *p_mesh_instance,
-			Ref<FBXState> p_state,
-			Ref<FBXNode> p_gltf_node);
-	FBXMeshIndex _convert_mesh_to_fbx(Ref<FBXState> p_state,
-			MeshInstance3D *p_mesh_instance);
 	Error _parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> p_file);
 };
 
