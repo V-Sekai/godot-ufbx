@@ -452,6 +452,33 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 		Vector<float> blend_weights;
 		Vector<int> blend_channels;
+		if (use_blend_shapes) {
+			print_verbose("FBX: Mesh has targets");
+
+			import_mesh->set_blend_shape_mode(Mesh::BLEND_SHAPE_MODE_NORMALIZED);
+
+			for (const ufbx_blend_deformer *fbx_deformer : fbx_mesh->blend_deformers) {
+				for (const ufbx_blend_channel *fbx_channel : fbx_deformer->channels) {
+					if (fbx_channel->keyframes.count == 0) {
+						continue;
+					}
+
+					// Use the last shape keyframe by default
+					ufbx_blend_shape *fbx_shape = fbx_channel->keyframes[fbx_channel->keyframes.count - 1].shape;
+
+					String bs_name;
+					if (fbx_channel->name.length > 0) {
+						bs_name = _as_string(fbx_channel->name);
+					} else {
+						bs_name = String("morph_") + itos(blend_channels.size());
+					}
+					import_mesh->add_blend_shape(bs_name);
+					blend_weights.push_back(float(fbx_channel->weight));
+					blend_channels.push_back(float(fbx_channel->typed_id));
+				}
+			}
+		}
+
 		for (const ufbx_mesh_part &fbx_mesh_part : fbx_mesh->material_parts) {
 			for (Mesh::PrimitiveType primitive : primitive_types) {
 				uint32_t num_indices = 0;
@@ -720,16 +747,6 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 							// Use the last shape keyframe by default
 							ufbx_blend_shape *fbx_shape = fbx_channel->keyframes[fbx_channel->keyframes.count - 1].shape;
-
-							String bs_name;
-							if (fbx_channel->name.length > 0) {
-								bs_name = _as_string(fbx_channel->name);
-							} else {
-								bs_name = String("morph_") + itos(morphs.size());
-							}
-							import_mesh->add_blend_shape(bs_name);
-							blend_weights.push_back(float(fbx_channel->weight));
-							blend_channels.push_back(float(fbx_channel->typed_id));
 
 							Array array_copy;
 							array_copy.resize(Mesh::ARRAY_MAX);
