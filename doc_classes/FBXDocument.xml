@@ -25,14 +25,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="append_from_scene">
-			<return type="int" enum="Error" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="state" type="FBXState" />
-			<param index="2" name="flags" type="int" default="0" />
-			<description>
-			</description>
-		</method>
 		<method name="generate_scene">
 			<return type="Node" />
 			<param index="0" name="state" type="FBXState" />
