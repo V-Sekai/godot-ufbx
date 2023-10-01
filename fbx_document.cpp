@@ -462,10 +462,6 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 					if (fbx_channel->keyframes.count == 0) {
 						continue;
 					}
-
-					// Use the last shape keyframe by default
-					ufbx_blend_shape *fbx_shape = fbx_channel->keyframes[fbx_channel->keyframes.count - 1].shape;
-
 					String bs_name;
 					if (fbx_channel->name.length > 0) {
 						bs_name = _as_string(fbx_channel->name);
