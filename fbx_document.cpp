@@ -2180,7 +2180,7 @@ void FBXDocument::_generate_scene_node(Ref<FBXState> p_state, const FBXNodeIndex
 		}
 	}
 
-	ERR_FAIL_COND(!current_node);
+	ERR_FAIL_NULL(current_node);
 
 	// Add the node we generated and set the owner to the scene root.
 	p_scene_parent->add_child(current_node, true);
@@ -2359,7 +2359,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		NodePath transform_node_path;
 		FBXNodeIndex node_index = track_i.key;
 		Node *root = p_animation_player->get_parent();
-		ERR_FAIL_COND(root == nullptr);
+		ERR_FAIL_NULL(root);
 		HashMap<FBXNodeIndex, Node *>::Iterator node_element = p_state->scene_nodes.find(node_index);
 		ERR_CONTINUE_MSG(!node_element, vformat("Unable to find node %d for animation.", node_index));
 		node_path = root->get_path_to(node_element->value);
@@ -2368,7 +2368,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 
 		if (fbx_node->skeleton >= 0) {
 			const Skeleton3D *sk = p_state->skeletons[fbx_node->skeleton]->godot_skeleton;
-			ERR_FAIL_COND(sk == nullptr);
+			ERR_FAIL_NULL(sk);
 
 			const String path = p_animation_player->get_parent()->get_path_to(sk);
 			const String bone = fbx_node->get_name();
@@ -2486,7 +2486,7 @@ void FBXDocument::_import_animation(Ref<FBXState> p_state, AnimationPlayer *p_an
 		NodePath mesh_instance_node_path;
 
 		Node *root = p_animation_player->get_parent();
-		ERR_FAIL_COND(root == nullptr);
+		ERR_FAIL_NULL(root);
 		HashMap<FBXNodeIndex, Node *>::Iterator node_element = p_state->scene_nodes.find(node_index);
 		ERR_CONTINUE_MSG(!node_element, vformat("Unable to find node %d for animation.", node_index));
 		NodePath node_path = root->get_path_to(node_element->value);
@@ -2707,7 +2707,7 @@ Error FBXDocument::_parse_fbx_state(Ref<FBXState> p_state, const String &p_searc
 	Error err;
 
 	// Abort parsing if the scene is not loaded.
-	ERR_FAIL_COND_V(p_state->scene.get() == nullptr, ERR_PARSE_ERROR);
+	ERR_FAIL_NULL_V(p_state->scene.get(), ERR_PARSE_ERROR);
 
 	/* PARSE SCENE */
 	err = _parse_scenes(p_state);
