@@ -800,7 +800,7 @@ Error FBXDocument::_parse_meshes(Ref<FBXState> p_state) {
 
 							// Enforce blend shape mask array format
 							for (int l = 0; l < Mesh::ARRAY_MAX; l++) {
-								if (!(Mesh::ARRAY_FORMAT_BLEND_SHAPE_MASK & (1 << l))) {
+								if (!(Mesh::ARRAY_FORMAT_BLEND_SHAPE_MASK & (static_cast<int64_t>(1) << l))) {
 									array_copy[l] = Variant();
 								}
 							}
