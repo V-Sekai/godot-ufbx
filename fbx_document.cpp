@@ -2580,7 +2580,7 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	ufbx_load_opts opts = {};
 	opts.target_axes = ufbx_axes_right_handed_y_up;
 	opts.target_unit_meters = 1.0f;
-	opts.space_conversion = UFBX_SPACE_CONVERSION_ADJUST_TRANSFORMS;
+	opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
 	opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_HELPER_NODES;
 	opts.inherit_mode_handling = UFBX_INHERIT_MODE_HANDLING_COMPENSATE;
 	opts.geometry_transform_helper_name.data = "_GeometryTransformHelper";
@@ -2590,7 +2590,6 @@ Error FBXDocument::_parse(Ref<FBXState> p_state, String p_path, Ref<FileAccess> 
 	opts.target_camera_axes = ufbx_axes_right_handed_y_up;
 	opts.target_light_axes = ufbx_axes_right_handed_y_up;
 	opts.clean_skin_weights = true;
-	opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
 	if (p_state->discard_meshes_and_materials) {
 		opts.ignore_geometry = true;
 		opts.ignore_embedded = true;
